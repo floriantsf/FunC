@@ -1,0 +1,12 @@
+(ocamllex
+ (modules lexer))
+(menhir
+ (modules parser)
+ (flags --explain --dump)
+ (infer true))
+(executable
+ (name func)
+ )
+(env
+  (dev
+    (flags ())))
