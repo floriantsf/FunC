@@ -7,6 +7,7 @@
 %token COMMA DOT ASSIGN SEMICOLON LBRACK RBRACK 
 %token EOF 
 %token INT STRUCT IF ELSE WHILE RETURN SIZEOF
+%token STAR
 
 %right ASSIGN
 %left OR
@@ -30,7 +31,10 @@
 file : l = decl* ; EOF {{decls = l}}
    ;
 decl : 
-         decl_typ 
-         | decl_fct
+  | dt = decl_typ { DeclTyp dt}
+  | fct = decl_fct {DeclFct fct}
    ;
-   decl_vars : INT; l = separated_nonempty_list(COMMA, IDENT) ; SEMICOLON{{
+decl_vars : 
+  |INT; l = separated_nonempty_list(COMMA, IDENT) ; SEMICOLON{{ }}
+%%
+

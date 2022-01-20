@@ -34,6 +34,7 @@ let entier = 0
 rule token = parse 
              |ident as s {try Hashtbl.find keywords s with Not_found -> IDENT s}
              | entier as x {INT (int_of_string x)}
+             | "*" {STAR}
              | "=" {ASSIGN}
              | "||" {OR}
              |"&&" {AND}
