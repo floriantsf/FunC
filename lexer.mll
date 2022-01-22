@@ -6,7 +6,7 @@ open Parser
 exception Lexing_error of string
 let keywords = Hashtbl.create 20 
 
-let () = List.iter (fun (s,t) -> Hashtbl.add keywords ss t) 
+let () = List.iter (fun (s,t) -> Hashtbl.add keywords s t) 
     [
       "int" , INT;
       "struct", STRUCT;
@@ -22,18 +22,18 @@ let () = List.iter (fun (s,t) -> Hashtbl.add keywords ss t)
 let alpha = ['a'-'z' 'A'-'Z']
 let chiffre = ['0'-'9']
 let ident = (alpha | '_') (alpha |chiffre | '_')*
-let chiffre-octal = '0'-'7'
-let chiffre-hexa = '0'-'9' |'a'-'f' | 'A'-'F'                      
-
+let chiffre_octal = ['0'-'7']
+let chiffre_hexa = ['0'-'9' 'a'-'f'  'A'-'F']
+let qqconque = [ ^ '"']
             
-let entier = 0 
-           | '1'-'9' chiffre* 
-           | '0' (chiffre-octal)+
-           | "0x" (chiffre-hexa)+
+let entier = '0'
+           | ['1'-'9'] chiffre* 
+           | '0' (chiffre_octal)+
+           | "0x" (chiffre_hexa)+
 
 rule token = parse 
              |ident as s {try Hashtbl.find keywords s with Not_found -> IDENT s}
-             | entier as x {INT (int_of_string x)}
+             | entier as x {CONST (int_of_string x)}
              | "*" {STAR}
              | "=" {ASSIGN}
              | "||" {OR}
@@ -48,6 +48,7 @@ rule token = parse
              |"-" {SUB}
              |"*" {MUL}
              |"/" {DIV}
+             |"%" {MOD}
              |"!" {NOT}
              |"->" {SELECT}
              |"{" {LBRACK}
@@ -62,7 +63,7 @@ rule token = parse
              |'"' {chaine lexbuf}
              |[' ' '\t'] {token lexbuf}
              |eof {EOF}
-             |_ as s{raise (Lexing_error ("Unknown keyword"^s))}
+             |_ {raise (Lexing_error ("Unknown keyword"))}
 and comment1 = parse 
              | "*/" {token lexbuf}
              | "\n" {Lexing.new_line lexbuf; comment1 lexbuf}
@@ -73,7 +74,7 @@ and comment2 = parse
              | eof {EOF}
              | _ {comment2 lexbuf}
 and chaine = parse 
-           |'"' {let res = !string_buffer in string_buffer := ""; CHAINE res} 
+           |'"' {let res = !string_buffer in string_buffer := ""; STRING res} 
            |"\\\"" {string_buffer := !string_buffer ^ Char.escaped '"'; chaine lexbuf} 
            |"\\n" {string_buffer := !string_buffer ^ "\n"; chaine lexbuf} 
            |"\\\\" {string_buffer :=  !string_buffer ^"\\"; chaine lexbuf} 

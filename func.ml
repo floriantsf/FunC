@@ -36,7 +36,7 @@ let main () =
     let buf = Lexing.from_channel f in 
     try
 
-        let p = Parser.fichier Lexer.token buf in (* Pour l'instant on ne donne pas de nom a ce qui a été créé a partir de l'analyse syntaxique *)
+        let p = Parser.file Lexer.token buf in (* Pour l'instant on ne donne pas de nom a ce qui a été créé a partir de l'analyse syntaxique *)
         close_in f;
         if !parse_only then exit 0; (* On s'arrete à l'analyse syntaxique dans ce cas *)
         
@@ -60,14 +60,10 @@ let main () =
                 localisation (Lexing.lexeme_start_p buf);
                 eprintf "Erreur lexicale: %s@." c;
                 exit 1
-        | Ast.Error s ->
-                localisation (Lexing.lexeme_start_p buf);
-                eprintf "Erreur dans la syntaxe : %s @." s;
-                exit 1
         | Parser.Error ->
                 (* On détecte une erreur de syntaxe, on la signale et on ferme le programme *)
                 localisation (Lexing.lexeme_start_p buf);
                 eprintf "Erreur Syntaxique au mot %s@." (Lexing.lexeme buf);
                 exit 1
 
-main () 
+let () = main () 
