@@ -2,7 +2,7 @@ type ident = string
 
 type loc = Lexing.position * Lexing.position
 
-type typ = Int | Struct of ident
+type typ = Typenull | Int | Struct of ident
 
 type unop = 
   |Unot  
@@ -14,7 +14,7 @@ type binop =
     | Band | Bor      (* && || *)
 
 
-type loc_file = {decls : loc_decl list}
+type loc_file = {loc_decls : loc_decl list}
 and 
   loc_decl = DeclTyp of loc_decl_typ | DeclFct of loc_decl_fct
 and
