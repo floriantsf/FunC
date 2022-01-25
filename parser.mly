@@ -4,7 +4,7 @@
 
 %token ADD SUB MUL DIV NEG LPAR RPAR MOD NOT 
 %token EQ NEQ LT LE GT GE AND OR
-%token COMMA DOT ASSIGN SEMICOLON LBRACK RBRACK 
+%token COMMA ASSIGN SEMICOLON LBRACK RBRACK 
 %token EOF 
 %token INT STRUCT IF ELSE WHILE RETURN SIZEOF
 %token STAR SELECT
@@ -57,6 +57,7 @@ param :
 ;
 expr : 
   |i = CONST {{expr_node = LInt i; loc_expr = $startpos, $endpos}}
+  |i = STRING {{expr_node = LString i; loc_expr = $startpos, $endpos}}
   |s = IDENT {{expr_node = LIdent s; loc_expr = $startpos, $endpos}}
   |e = expr ; SELECT; n = IDENT {{expr_node = LPoint (e, n); loc_expr = $startpos, $endpos}}
   |f  = IDENT ; LPAR ; l = separated_list (COMMA, expr) ;RPAR {{expr_node = LCall (f,l); loc_expr = $startpos,$endpos}}

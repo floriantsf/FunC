@@ -51,6 +51,7 @@ and loc_param_fct ={
   loc_param_fct : loc;
 }
 and loc_expr_node = 
+  | LString of string
   | LInt of int
   | LIdent of ident
   | LPoint of loc_expr * ident

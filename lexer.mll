@@ -56,7 +56,6 @@ rule token = parse
              |"(" {LPAR}
              |")" {RPAR}
              |"," {COMMA}
-             |"." {DOT}
              |"\n" {Lexing.new_line lexbuf; token lexbuf}
              |"/*" {comment1 lexbuf}
              |"//" {comment2 lexbuf}
