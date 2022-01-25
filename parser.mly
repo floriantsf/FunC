@@ -34,7 +34,7 @@
 %%
 
 file : 
-  l = decl* ; EOF {{decls = l}}  
+  l = decl* ; EOF {{loc_decls = l}}  
 ;
 decl : 
   | dt = decl_typ { DeclTyp dt}
@@ -62,11 +62,12 @@ expr :
   |f  = IDENT ; LPAR ; l = separated_list (COMMA, expr) ;RPAR {{expr_node = LCall (f,l); loc_expr = $startpos,$endpos}}
   |NOT; e = expr {{expr_node = LUnop (Unot, e); loc_expr = $startpos,$endpos}}
   |SUB; e = expr %prec NEG {{expr_node = LUnop (Uneg, e); loc_expr = $startpos, $endpos}}
-  |e1 = expr; o = operateur ; e2 = expr {{expr_node = LBinop (o, e1, e2); loc_expr = $startpos,$endpos}}
+  |e1 = expr; o = operator ; e2 = expr {{expr_node = LBinop (o, e1, e2); loc_expr = $startpos,$endpos}}
   |SIZEOF ; LPAR; STRUCT; n = IDENT; RPAR {{expr_node = LSizeof n; loc_expr = $startpos,$endpos}}
   |LPAR; e = expr; RPAR {e}
   ;
-%inline operateur:
+%inline operator:
+  |ASSIGN {Bassign}
   |EQ {Beq}
   |NEQ {Bneq}
   |LT {Blt}

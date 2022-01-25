@@ -9,6 +9,7 @@ type unop =
   |Uneg 
 
 type binop =
+    | Bassign
     | Badd | Bsub | Bmul | Bdiv | Bmod    (* + - * / % *)
     | Beq | Bneq | Blt | Ble | Bgt | Bge  (* == != < <= > >= *)
     | Band | Bor      (* && || *)
