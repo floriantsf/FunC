@@ -2,6 +2,7 @@
 
 
 {
+let p_p = Preparser.defs Preprocess.token lexbuf in
 open Parser
 exception Lexing_error of string
 let keywords = Hashtbl.create 20 
@@ -32,7 +33,9 @@ let entier = '0'
            | "0x" (chiffre_hexa)+
 
 rule token = parse 
-             |ident as s {try Hashtbl.find keywords s with Not_found -> IDENT s}
+             |ident as s {try Hashtbl.find keywords s with Not_found -> (try (match Hashtbl.find p_p.definitions s
+                with VInt i -> CONST i) 
+              with Not_found -> IDENT s)}
              | entier as x {CONST (int_of_string x)}
              | "*" {STAR}
              | "=" {ASSIGN}
@@ -63,6 +66,30 @@ rule token = parse
              |[' ' '\t'] {token lexbuf}
              |eof {EOF}
              |_ {raise (Lexing_error ("Unknown keyword"))}
+
+and check_for_condition = parse
+             |"ifdef" {check_ifdef lexbuf}
+             |"ifndef" {check_ifndef lexbuf}
+             |'\n' {Lexing.new_line lexbuf; token lexbuf}
+             |_ {check_for_condition lexbuf}
+and check_ifdef = parse 
+             |ident as s {if Hashtbl.mem p_p.definitions then token lexbuf else process_condition_false lexbuf}
+             |' ' {check_ifdef lexbuf}
+             |_ {raise (Lexing_error "no check for definition")}
+and check_ifndef = parse 
+             |ident as s {if Hashtbl.mem p_p.definitions then process_condition_false lexbuf else token lexbuf}
+             |' ' {check_ifdef lexbuf}
+             |_ {raise (Lexing_error "error")}
+and process_condition_false = parse
+             |'#' {check_for_endif lexbuf}
+             |'\n' {Lexing.new_line lexbuf; process_condition_false lexbuf}
+             |eof { assert false}
+             |_ {process_condition_false lexbuf}
+and check_for_endif = parse
+             |' ' {check_for_endif lexbuf}
+             |'\n' {Lexing.new_line lexbuf; process_condition_false}
+             |"endif" {token lexbuf}
+             |_ {check_for_endif lexbuf}
 and comment1 = parse 
              | "*/" {token lexbuf}
              | "\n" {Lexing.new_line lexbuf; comment1 lexbuf}
