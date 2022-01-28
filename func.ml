@@ -3,7 +3,6 @@ open Lexing
 
 
 (* Options inutiles au projet *)
-let logo = ref false
 (* Option pour s'arreter à l'issue du parser *)
 let parse_only = ref false
 let type_only = ref false
