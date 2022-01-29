@@ -1,8 +1,12 @@
-open Ast
+                                                                     
+(* types produced during typing and used during ??? *)
 
-type ty_decl_vars =
-  | Ty_dv_Int of ident
-  | Ty_dv_Sr of ident * ident (* var's ident, type's ident *)
+open Ast
+exception Typing_error of {loc : loc ; msg : string}
+
+(* dv : decl_vars ; dt : decl_typ, ; df : decl_fct *)
+
+type ty_dv = {typ : ctype ; var : ident}
 
 (* We didn't need decl_type anymore *)
 
@@ -23,18 +27,16 @@ type ty_stmt =
   | Ty_Sreturn of ty_expr
 
 and ty_bloc_un = 
-  | Ty_Bdv of ty_decl_vars
+  | Ty_Bdv of ty_dv
   | Ty_Bstmt of ty_stmt
 and ty_bloc = ty_bloc_un list
    
-type ty_decl_fct =
+type ty_df =
 { id : ident ;
   params : ident list ;
   body : ty_bloc }
 
-type ty_all =
+type ty_file =
 { sr_size_tab : (ident , int) Hashtbl.t ;
-  fcts : ty_decl_fct list 
-}
+  fcts : ty_df list }
   
-
