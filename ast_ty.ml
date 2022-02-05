@@ -38,9 +38,7 @@ type ty_df =
   params : ident list ;
   body : ty_bloc }
 
-type ty_file =
-{ sr_size_tab : (ident , int) Hashtbl.t ;
-  fcts : ty_df list }
+type ty_file = ty_df list
  
 
 
@@ -49,6 +47,10 @@ type ty_file =
 type tab_champs = (ident , (ctype * int)) Hashtbl.t
 type env_sr = (ident , (tab_champs * int)) Hashtbl.t
 type env_vars = ctype IdMap.t
-type env_fct = (ident , (ctype * (ctype list)) Hashtbl.t
+type ty_info_fct = 
+{ mutable usefull : bool ; (* On jète les fonctions jamais appelées *)
+  type_r : ctype ; 
+  type_params : ctype list }
+type env_fct = (ident , ty_info_fct ) Hashtbl.t
 
 type ty_env = { env_v : env_vars ; env_s : env_sr ; env_f : env_fct }

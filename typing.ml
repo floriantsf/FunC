@@ -2,6 +2,7 @@ open Ast
 open Ast_pars
 open Ast_ty
 
+let warnings = ref true
 
 (* FONCTIONS AUXILIAIRES POUR VERIFIER SI DEUX TYPES SONT EQUIVALENTS. *)
 
@@ -100,15 +101,17 @@ let rec ty_expr env de : (ctype_typed * ty_expr) =
   | Par_Ecall (did , lde) ->
     begin match Hashtbl.find_opt ens_f did.desc with
     | None -> raise (Typing_error {loc = did.loc ; msg = "Fonction inconnue"})
-    | Some (ty_r , lty_args) ->
+    | Some info_f ->
+      (* rappel : on jète les fonctions jamais appelées *)
+      info_f.usefull <- true ;
       let ltype , lty = List.split (List.map (ty_expr env) lde) in
       begin try
-        List.iter2 test_ty_equiv ltype lty_args ;
-        (CT ty_r , Ty_Ecall (did.desc , lty) )
+        List.iter2 test_ty_equiv ltype info_f.type_params ;
+        (CT info_f.type_r , Ty_Ecall (did.desc , lty) )
       with | Invalid_argument _ ->
         raise (Typing_error {loc = loc ; 
         msg = did.desc ^ " est appelée sur un mauvais nombre d'arguments, "
-        ^ (string_of_int (List.length lty_args)) ^ " demandés, "
+        ^ (string_of_int (List.length info_f.type_params)) ^ " demandés, "
         ^ (string_of_int (List.length lde)) ^ " donnés." })
       end
     end
@@ -142,8 +145,6 @@ let ty_dvars env_v env_s dvars : (env_vars * par_bloc) =
 
 
 (* TRAITEMENT DES INSTRUCTIONS ET BLOCS *)
-
-let warning = false
 
 (* En Java, le compilateur préfère s'assurer que toute méthode a 
    un return si le type de retour n'est pas void.
@@ -199,7 +200,7 @@ and ty_bloc env type_r_ask bl : (bool * ty_bloc) = match bl with
    on ne construit par d'arbre de sortie. En revanche on calcule
    les offsets et les sizes. *)
 
-let process_struct env_s dt =
+let process_struct env_s dt : unit =
   if Hashtbl.mem env_s dt.nom.desc 
   then raise (Typing_error {loc = dt.nom.loc ;
     msg = "Type construit déjà existant"}) ;
@@ -225,6 +226,37 @@ let process_struct env_s dt =
     dt.fields ;
   Hashtbl.replace env_s dt.nom.desc (tabch,!offset)
   
+
+let ty_fct env_s env_f (df : par_df) : ty_df =
+  (* But : ajouter une fonction à l'env *)
+  if Hashtbl.mem env_f df.nom.desc 
+  then raise (Typing_error {loc = df.nom.loc ;
+    msg = "Une autre application est déjà nommée ainsi" }) ;
+  test_welldef env_s df.type_r ;
+  let set_params = ref IdSet.empty in
+  let type_params,ty_params = 
+    List.split (
+    List.map 
+     (fun (dp : par_param) -> 
+        test_welldef env_s dp.typ ;
+        if IdSet.mem dp.nom.desc !set_params 
+        then raise (Typing_error {loc = dp.nom.loc ;
+          msg = "Deux paramètres d'une application ne peuvent partager le même nom."}) ;
+        set_params := IdSet.add dp.nom.desc !set_params ;
+        (dp.typ.desc , dp.nom.desc)
+      )
+      df.params ) 
+  in
+  Hashtbl.add env_f df.nom.desc 
+    {usefull = false ; type_r = df.type_r.desc ; type_params = type_params} ;
+  let env = {env_v = IdMap.empty ; env_s = env_s ; env_f = env_f} in
+  let (b,ty_bl) = ty_bloc env df.type_r.desc df.body.desc in
+  if not !b && !warnings
+  then Printf.printf "WARNING : il manque un return à cette fonction" ;
+  (* Utiliser raise, si Typing_error on s'arrête, si c'est juste Typing_warning, 
+     on peut continuer, et si on veut on affiche le warning rapporté. *)
+  { id = df.nom.desc ; params = ty_params ; body = ty_bl }
+
 
 
 

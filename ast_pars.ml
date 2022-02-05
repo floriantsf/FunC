@@ -36,7 +36,8 @@ type par_dt = {nom : ident desc ; fields : par_dv list}
 
 type par_df = 
 { type_r : ctype desc ; 
-  params : par_param desc list ;
+  nom : ident desc ;
+  params : par_param list ;
   body : bloc desc }
 
 type par_decl = 
