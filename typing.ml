@@ -137,7 +137,7 @@ let ty_dvars env_v env_s dvars : (env_vars * par_bloc) =
       (IdMap.add did.desc type_v env_v' , 
       Par_Bdv {typ = type_v ; var = did.desc} :: lty_v )
     (env_v , [])
-    ty_dv 
+   dvars.vars
     
 
 
@@ -205,8 +205,26 @@ let process_struct env_s dt =
     msg = "Type construit déjà existant"}) ;
   (* Pour le moment on ne considère que des long int et des pointeurs, 
      ainsi un champ prend toujours 8 octets. *)
-
-
+  let offset = ref 0 in
+  let tabch = Hashtbl.create 8 in
+  Hashtbl.add env_s dt.nom.desc (tabch,0) ; 
+  (* Permet d'avoir des champs de type cette structure *)
+  List.iter 
+   (fun (dvars : par_dv) -> 
+      test_welldef env_s dvars.typ ; 
+      let type_v = dvars.typ.desc in
+      List.iter 
+       (fun did -> 
+          if Hashtbl.mem tabch did.desc 
+          then raise (Typing_error { loc = did.loc ;
+            msg = "Au sein d'une structure il ne peut y avoir deux champs de même nom."})
+          else (Hashtbl.add tabch did.desc !offset ; offset := 8 + !offset)
+        )
+        dvars.vars
+    )
+    dt.fields ;
+  Hashtbl.replace env_s dt.nom.desc (tabch,!offset)
+  
 
 
 

@@ -32,7 +32,7 @@ and par_bloc = par_bloc_un desc list
 
 type par_param = {typ : ctype desc ; nom : ident desc}
 
-type par_dt = {nom : ident desc ; fields : par_dv desc list}
+type par_dt = {nom : ident desc ; fields : par_dv list}
 
 type par_df = 
 { type_r : ctype desc ; 
