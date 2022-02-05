@@ -15,6 +15,8 @@ type ty_expr =
   | Ty_Eident of ident
   | Ty_Eunop of unop * ty_expr
   | Ty_Ebinop of binop * ty_expr * ty_expr
+  | Ty_Eassign_var of ident * ty_expr
+  | Ty_Eassign_ch of ty_expr * int * ty_expr
   | Ty_Ecall of ident * (ty_expr list)
   | Ty_Ept of expr * int
  
@@ -39,4 +41,14 @@ type ty_df =
 type ty_file =
 { sr_size_tab : (ident , int) Hashtbl.t ;
   fcts : ty_df list }
-  
+ 
+
+
+(* === Others things used to type === *)
+
+type tab_champs = (ident , (ctype * int)) Hashtbl.t
+type env_sr = (ident , (tab_champs * int)) Hashtbl.t
+type env_vars = ctype IdMap.t
+type env_fct = (ident , (ctype * (ctype list)) Hashtbl.t
+
+type ty_env = { env_v : env_vars ; env_s : env_sr ; env_f : env_fct }

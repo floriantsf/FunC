@@ -6,6 +6,8 @@ exception Parser_error of string
 
 (* dv : decl_vars ; dt : decl_typ, ; df : decl_fct *)
 
+type par_dv = {typ : ctype desc ; vars : ident desc list}
+
 type par_expr =
   | Par_Eint of int
   | Par_Eident of ident
@@ -17,7 +19,7 @@ type par_expr =
 
 type par_stmt =
   | Par_Snil
-  | Par_Sexpr of par_expr
+  | Par_Sexpr of par_expr desc
   | Par_Sif of (par_expr desc) * (par_stmt desc) * (par_stmt desc)
   | Par_Swhile of (par_expr desc) * (par_stmt desc)
   | Par_Sbloc of par_bloc
@@ -29,8 +31,6 @@ and par_bloc_un =
 and par_bloc = par_bloc_un desc list
 
 type par_param = {typ : ctype desc ; nom : ident desc}
-
-type par_dv = {typ : ctype desc ; vars : ident desc list}
 
 type par_dt = {nom : ident desc ; fields : par_dv desc list}
 
