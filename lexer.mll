@@ -2,8 +2,8 @@
 
 
 {
-let p_p = Preparser.defs Preprocess.token lexbuf in
 open Parser
+(*let p_p = Preparser.defs Preprocess.token lexbuf in*)
 exception Lexing_error of string
 let keywords = Hashtbl.create 20 
 
@@ -66,7 +66,7 @@ rule token = parse
              |[' ' '\t'] {token lexbuf}
              |eof {EOF}
              |_ {raise (Lexing_error ("Unknown keyword"))}
-
+(*
 and check_for_condition = parse
              |"ifdef" {check_ifdef lexbuf}
              |"ifndef" {check_ifndef lexbuf}
@@ -90,6 +90,7 @@ and check_for_endif = parse
              |'\n' {Lexing.new_line lexbuf; process_condition_false}
              |"endif" {token lexbuf}
              |_ {check_for_endif lexbuf}
+   *)
 and comment1 = parse 
              | "*/" {token lexbuf}
              | "\n" {Lexing.new_line lexbuf; comment1 lexbuf}

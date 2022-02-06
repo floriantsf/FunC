@@ -1,5 +1,5 @@
-tyep value = 
-  |VInt of int
+type value = 
+  VInt of int
   
 
 type pre_result = 
