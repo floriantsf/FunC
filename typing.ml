@@ -251,7 +251,7 @@ let ty_fct env_s env_f (df : par_df) : ty_df =
   Hashtbl.add env_f df.nom.desc 
     {usefull = false ; type_r = df.type_r.desc ; type_params = type_params} ;
   let env = {env_v = IdMap.empty ; env_s = env_s ; env_f = env_f} in
-  let (b,ty_bl) = ty_bloc env df.type_r.desc df.body.desc in
+  let (b,ty_bl) = ty_bloc env df.type_r.desc df.body in
   if not !b && !warnings
   then Printf.printf "WARNING : il manque un return à cette fonction" ;
   (* Utiliser raise, si Typing_error on s'arrête, si c'est juste Typing_warning, 

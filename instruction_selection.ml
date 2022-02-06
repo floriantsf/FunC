@@ -43,8 +43,8 @@ let rec mkAnd e1 e2 = match (e1, e2) with
   |_ -> Sel_binop (Iand , e1, e2)
 
 let rec mkOr e1 e2 = match (e1, e2) with
-  |(Sel_Eint n, _) where n <> 0 -> Sel_Eint 1
-  |(_, Sel_Eint n) where n <> 0 -> Sel_Eint 1
+  |(Sel_Eint n, _) when n <> 0 -> Sel_Eint 1
+  |(_, Sel_Eint n) when n <> 0 -> Sel_Eint 1
   |_ -> Sel_binop (Ior, e1, e2)
 
 

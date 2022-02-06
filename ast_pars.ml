@@ -4,7 +4,7 @@
 open Ast
 exception Parser_error of string
 
-(* dv : decl_vars ; dt : decl_typ, ; df : decl_fct *)
+(* dv : decl_vars ; dt : decl_typ, ; df : decl_fct ; dfl : decl_field *)
 
 type par_expr =
   | Par_Eint of int
@@ -15,8 +15,11 @@ type par_expr =
   | Par_Ept of (par_expr desc) * (ident desc)
   | Par_Esize of ident desc
 
+type par_dv = 
+{ typ : ctype desc ; 
+  vars : ((ident desc) * (par_expr desc option)) list }
 type par_stmt =
-  | Par_Sdv of (ctype desc) * (((ident desc) * (par_expr desc option)) list)
+  | Par_Sdv of par_dv
   | Par_Snil
   | Par_Sexpr of par_expr desc
   | Par_Sif of (par_expr desc) * (par_stmt desc) * (par_stmt desc)
@@ -26,14 +29,14 @@ type par_stmt =
 
 type par_param = {typ : ctype desc ; nom : ident desc}
 
-type par_dv = {typ : ctype desc ; vars : ident desc list}
-type par_dt = {nom : ident desc ; fields : par_dv list}
+type par_dfl = {typ : ctype desc ; vars : ident desc list}
+type par_dt = {nom : ident desc ; fields : par_dfl list}
 
 type par_df = 
 { type_r : ctype desc ; 
   nom : ident desc ;
   params : par_param list ;
-  body : par_bloc }
+  body : par_stmt desc list }
 
 type par_decl = 
   | Par_Ddt of par_dt
