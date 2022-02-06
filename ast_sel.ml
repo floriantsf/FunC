@@ -2,10 +2,13 @@ open Ast
 
 type instr_binop = 
      |Iadd | Isub |Iimul |Idiv|Imod |Imov |Isetl |Isetle
+     |Iand |Ior
      (* Les opérateurs binaires de x86-64 *)
 type instr_unop =
   |IUadd of int  (* Ajoute l'operande immediate n à son argument *)
   |IUsub of int (* Soustrait n à l'argument *)
+  |Inot
+  |Ineg
       (* Les opérateurs unaires de x86-64 *)
      
 
@@ -14,16 +17,17 @@ type selec_expr =
   | Sel_Eident of ident
   | Sel_Eassign of ident * selec_expr
   | Sel_load of int * selec_expr
-  | Sel_store of int*selec_expr * selec_expr
+  | Sel_store of int*selec_expr * selec_expr (* Assigne la valuer du deuxieme au champ int du premier *)
   | Sel_binop of instr_binop * selec_expr * selec_expr
   | Sel_unop of instr_unop * selec_expr
   | Sel_call of ident* selec_expr list
 
 type selec_instruction =
-  | Sel_Inothing 
+  | Sel_Inil
   | Sel_Iexpr of selec_expr
   | Sel_Iif of selec_expr * selec_instruction * selec_instruction
   | Sel_Iwhile of selec_expr * selec_instruction
+  | Sel_Ireturn of selec_expr 
   | Sel_block of selec_instruction list
 
 type selec_stmt =
