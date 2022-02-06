@@ -5,13 +5,14 @@ type instr_binop =
      (* Les opérateurs binaires de x86-64 *)
 type instr_unop =
   |IUadd of int  (* Ajoute l'operande immediate n à son argument *)
+  |IUsub of int (* Soustrait n à l'argument *)
       (* Les opérateurs unaires de x86-64 *)
      
 
 type selec_expr = 
   | Sel_Eint of int
   | Sel_Eident of ident
-  | Sel_Eequal of ident * selec_expr
+  | Sel_Eassign of ident * selec_expr
   | Sel_load of int * selec_expr
   | Sel_store of int*selec_expr * selec_expr
   | Sel_binop of instr_binop * selec_expr * selec_expr
