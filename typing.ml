@@ -61,7 +61,7 @@ let rec ty_expr env de : (ctype_typed * ty_expr) =
       then raise (Typing_error {loc = de'.loc ; 
           msg = "Cette expression doit avoir un type équivalent à \
           Int pour lui appliquer un moins unaire."})
-      else (CT Int , Ty_Eunop op ty_e')
+      else (CT Int , Ty_Eunop (op,ty_e'))
 
   | Par_Ebinop (op , de1 , de2) -> 
     let type_e1 , ty_e1 = ty_expr env de1 in
@@ -70,7 +70,7 @@ let rec ty_expr env de : (ctype_typed * ty_expr) =
     | Bassign -> begin match ty_e1 with
       | Ty_Eident id ->
         test_ty_equiv type_e1 type_e2 ;
-        (type_e1, Ty_Eassign_var id ty_e2)
+        (type_e1, Ty_Eassign_var (id,ty_e2))
       | Ty_Ept (e1',offset1) ->
         test_ty_equiv type_e1 type_e2 ;
         (type_e1, Ty_Eassign_ch (e1',offset1,ty_e2))
@@ -139,6 +139,7 @@ let ty_dvars env_v env_s dvars : (env_vars * par_bloc) =
         les redéfinitions ne sont pas autorisées." }) ;
       (IdMap.add did.desc type_v env_v' , 
       Par_Bdv {typ = type_v ; var = did.desc} :: lty_v )
+    )
     (env_v , [])
    dvars.vars
     
