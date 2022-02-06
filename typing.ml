@@ -61,7 +61,7 @@ let rec ty_expr env de : (ctype_typed * ty_expr) =
       then raise (Typing_error {loc = de'.loc ; 
           msg = "Cette expression doit avoir un type équivalent à \
           Int pour lui appliquer un moins unaire."})
-      else (CT Int , Ty_Eunop op ty_e'i)
+      else (CT Int , Ty_Eunop op ty_e')
 
   | Par_Ebinop (op , de1 , de2) -> 
     let type_e1 , ty_e1 = ty_expr env de1 in
@@ -226,9 +226,9 @@ let process_struct env_s dt : unit =
     dt.fields ;
   Hashtbl.replace env_s dt.nom.desc (tabch,!offset)
   
-
+(* TRAITEMENT DES DÉFINITIONS DE FONCTIONS *)
+(* But : ajouter une fonction à l'env *)
 let ty_fct env_s env_f (df : par_df) : ty_df =
-  (* But : ajouter une fonction à l'env *)
   if Hashtbl.mem env_f df.nom.desc 
   then raise (Typing_error {loc = df.nom.loc ;
     msg = "Une autre application est déjà nommée ainsi" }) ;
@@ -256,6 +256,32 @@ let ty_fct env_s env_f (df : par_df) : ty_df =
   (* Utiliser raise, si Typing_error on s'arrête, si c'est juste Typing_warning, 
      on peut continuer, et si on veut on affiche le warning rapporté. *)
   { id = df.nom.desc ; params = ty_params ; body = ty_bl }
+
+
+
+(* FONCTION PRINCIPALE : *)
+
+let ty_file (pf : par_file) : ty_file =
+  let env_s = Hashtbl.create 8 in
+  let env_f = Hashtbl.create 8 in
+  let rec aux = function
+    | [] -> []
+    | (Par_Ddt dt) :: q -> 
+      process_struct env_s dt ; aux q
+    | (Par_Ddf df) :: q -> 
+      (ty_fct env_s env_f df) :: (aux q)
+      (* On ne garde que les fonctions *)
+  in
+  let list_ty_f = aux pf in
+  List.filter 
+   (fun (ty_f : ty_df) ->
+      let info_f = Hashtbl.find env_f ty_f.id in
+      info_f.usefull)
+    list_ty_f
+
+
+
+
 
 
 

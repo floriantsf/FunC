@@ -44,4 +44,4 @@ type par_decl =
   | Par_Ddt of par_dt
   | Par_Ddf of par_df
 
-type par_file = par_decl desc list
+type par_file = par_decl list
