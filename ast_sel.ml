@@ -41,7 +41,7 @@ and selec_fun_declaration =
   {
      selec_fun_name : ident;
      selec_fun_args : ident list;
-     selec_fun_body : selec_stmt; 
+     selec_fun_body : selec_stmt list; 
   }
 
 and selec_program = selec_decl list
