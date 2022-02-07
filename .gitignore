@@ -1,3 +1,5 @@
 _build/*
 func
 tests/*
+tests_perso/
+*.swp

@@ -17,9 +17,9 @@ let ty_equiv (t1 : ctype_typed) (t2 : ctype_typed) : bool =
   | CT (Struct _) , Void -> true
   | _,_ -> false )
 
-let test_ty_equiv t1 t2 =
+let test_ty_equiv loc t1 t2 =
   if not (ty_equiv t1 t2) 
-  then raise (Typing_error {loc = de.loc ;
+  then raise (Typing_error {loc = loc ;
     msg = "Les deux membres de cette égalité/comparaison ne sont pas de \
     types équivalents. Respectivement : "^(str_of_ctype_typed t1)
     ^" et "^(str_of_ctype_typed t2) } )
@@ -37,7 +37,7 @@ let test_welldef env_s (dtyp : ctype desc) = match dtyp.desc with
 let rec ty_expr env de : (ctype_typed * ty_expr) = 
   match de.desc with
   | Par_Eint 0 -> Typenull , Ty_Eint 0
-  | Par_Eint n -> CT Int , Ty_Int n
+  | Par_Eint n -> CT Int , Ty_Eint n
   | Par_Eident id -> 
       begin match IdMap.find_opt id env.env_v with
       | None -> raise (Typing_error {loc = de.loc ; 
@@ -51,11 +51,12 @@ let rec ty_expr env de : (ctype_typed * ty_expr) =
       | CT (Struct sr) -> 
         begin match Hashtbl.find_opt env.env_s sr with
         | None -> 
-          raise (Typing_error {loc = loc ; msg = "Structure inconnue"})
+          raise (Typing_error {loc = de'.loc ; 
+            msg = "Cette expression a pour type une structure inconnue"})
         | Some (tab_chs,_) -> 
-          (match Hashtbl.find_opt tab_chs ch with
-          | None -> raise (Typing_error {loc = loc ; 
-            msg = ch^" n'est pas un champ de la structure "^sr})
+          (match Hashtbl.find_opt tab_chs ch.desc with
+          | None -> raise (Typing_error {loc = ch.loc ; 
+            msg = ch.desc ^" n'est pas un champ de la structure "^sr})
           | Some (t,offset) -> (CT t , Ty_Ept (ty_e',offset)) )
         end
       | _ -> 
@@ -77,46 +78,50 @@ let rec ty_expr env de : (ctype_typed * ty_expr) =
     begin match op with
     | Bassign -> begin match ty_e1 with
       | Ty_Eident id ->
-        test_ty_equiv type_e1 type_e2 ;
+        test_ty_equiv de.loc type_e1 type_e2 ;
         (type_e1, Ty_Eassign_var (id,ty_e2))
       | Ty_Ept (e1',offset1) ->
-        test_ty_equiv type_e1 type_e2 ;
+        test_ty_equiv de.loc type_e1 type_e2 ;
         (type_e1, Ty_Eassign_ch (e1',offset1,ty_e2))
       | _ -> raise (Typing_error { loc = de1.loc ;
         msg = "N'est pas une valeur gauche (ie une variable ou un champ)" })
       end
 
     | Beq | Bneq | Blt | Ble | Bgt | Bge ->
-      test_ty_equiv type_e1 type_e2 ;
+      test_ty_equiv de.loc type_e1 type_e2 ;
       (CT Int , Ty_Ebinop (op , ty_e1 , ty_e2) )
 
     | Band | Bor ->
       (CT Int , Ty_Ebinop (op , ty_e1 , ty_e2) )
 
     | Badd | Bsub | Bmul | Bdiv | Bmod ->
-      test_ty_equiv type_e1 (CT Int) ;
-      test_ty_equiv type_e2 (CT Int) ;
+      test_ty_equiv de.loc type_e1 (CT Int) ;
+      test_ty_equiv de.loc type_e2 (CT Int) ;
       (CT Int , Ty_Ebinop (op , ty_e1 , ty_e2) )
     end
 
   | Par_Esize did ->
-    begin match Hashtbl.find_opt ens_s did.desc with
+    begin match Hashtbl.find_opt env.env_s did.desc with
     | None -> raise (Typing_error {loc = did.loc ; msg = "Structure inconnue"})
     | Some (_,size) -> (CT Int , Ty_Eint size)
     end
 
   | Par_Ecall (did , lde) ->
-    begin match Hashtbl.find_opt ens_f did.desc with
+    begin match Hashtbl.find_opt env.env_f did.desc with
     | None -> raise (Typing_error {loc = did.loc ; msg = "Fonction inconnue"})
     | Some info_f ->
       (* rappel : on jète les fonctions jamais appelées *)
       info_f.usefull <- true ;
       let ltype , lty = List.split (List.map (ty_expr env) lde) in
+      let lloc = List.map (fun (de : par_expr desc) -> de.loc) lde in
+      let ltype_loc = List.combine ltype lloc in
       begin try
-        List.iter2 test_ty_equiv ltype info_f.type_params ;
+        List.iter2 
+          (fun (type_e,loc_e) type_ask -> test_ty_equiv loc_e type_e (CT type_ask)) 
+          ltype_loc info_f.type_params ;
         (CT info_f.type_r , Ty_Ecall (did.desc , lty) )
       with | Invalid_argument _ ->
-        raise (Typing_error {loc = loc ; 
+        raise (Typing_error {loc = de.loc ; 
         msg = did.desc ^ " est appelée sur un mauvais nombre d'arguments, "
         ^ (string_of_int (List.length info_f.type_params)) ^ " demandés, "
         ^ (string_of_int (List.length lde)) ^ " donnés." })
@@ -139,34 +144,46 @@ let rec ty_expr env de : (ctype_typed * ty_expr) =
    (Sinon les variables seraient déclarées locales au sous-bloc...)
    Si l'instruction int x=3,y,z=2 ; apparaissait dans un bloc, il faut la substituer
    par la liste des autres, et non pas la changer en Ty_Bloc (...). 
-   Si elle n'était pas dans un bloc, on peut faire un Ty_Bloc. *)
+   Si elle n'était pas dans un bloc, on peut faire un Ty_Bloc. 
+   Idem il faut garder ou non le nouveau env_vars. *)
 
-(* Traitement des déclarations / initialisations de variables *)
-let ty_dvars env_v env_s dvars : (env_vars * par_bloc) = 
-  test_welldef env_s dvars.typ ;
+let ty_dvars env (dvars : par_dv) : (ty_env * (ty_stmt list)) =
+  test_welldef env.env_s dvars.typ ;
   let type_v = dvars.typ.desc in
-  List.fold_left 
-    (fun (env_v',lty_v) did ->
-      if IdMap.mem did.desc env_v' 
+  let env' = {env_v = env.env_v ; env_s = env.env_s ; env_f = env.env_f} in 
+  let l_ty_s = List.fold_left
+   (fun l_ty_s (did, de_opt) ->
+      let id = did.desc in
+      if IdMap.mem id env'.env_v
       then raise (Typing_error {loc = did.loc ;
         msg = "Nom de variable déjà utilisé, \
         les redéfinitions ne sont pas autorisées." }) ;
-      (IdMap.add did.desc type_v env_v' , 
-      Par_Bdv {typ = type_v ; var = did.desc} :: lty_v )
+      env'.env_v <- IdMap.add id type_v env'.env_v ;
+      (Ty_Sdv id) :: 
+        begin match de_opt with
+        | None -> l_ty_s
+        | Some de -> 
+          let new_e = Par_Ebinop (Bassign , {desc = Par_Eident id ; loc = did.loc} , de) in
+          let new_loc_e = ( fst(did.loc) , snd(de.loc) ) in
+          let new_de : par_expr desc = {desc = new_e ; loc = new_loc_e} in
+          (Ty_Sexpr (snd (ty_expr env new_de))) :: l_ty_s
+        end
     )
-    (env_v , [])
-   dvars.vars
-    
+    [] dvars.vars_expr in
+  (env' , l_ty_s)
+
 
 let rec ty_stmt env type_r_ask ds : (bool * ty_stmt) = 
   (* bool : a-t-on trouvé un return à coup sûr *)
   match ds.desc with
+  | Par_Sdv dvars -> 
+      let _ , l_ty_s = ty_dvars env dvars in
+      (false , Ty_Sbloc l_ty_s)
   | Par_Snil -> (false , Ty_Snil)
   | Par_Sexpr de -> 
       let _,ty_e = ty_expr env de in
       (false , Ty_Sexpr ty_e)
   | Par_Sif (de,ds1,ds2) ->
-      (* TODO : supprimer les if triviaux *)
       let _,ty_e = ty_expr env de in
       let b1,ty_s1 = ty_stmt env type_r_ask ds1 in
       let b2,ty_s2 = ty_stmt env type_r_ask ds2 in
@@ -178,27 +195,24 @@ let rec ty_stmt env type_r_ask ds : (bool * ty_stmt) =
       (false , Ty_Swhile (ty_e , ty_s'))
   | Par_Sreturn de ->
       let type_e,ty_e = ty_expr env de in
-      test_ty_equiv type_e type_r_ask ;
+      test_ty_equiv de.loc type_e type_r_ask ;
       (true , Ty_Sreturn ty_e)
-  | Par_Sbloc bloc ->
-      let (b,ty_bl) = ty_bloc env type_r_ask in
-      (b , Ty_Sbloc ty_bl)
-
-and ty_bloc env type_r_ask bl : (bool * ty_bloc) = match bl with
-  | [] -> (false , [])
-  | {desc = Par_Bdv dvars} :: q -> 
-    let (env_v',lty_v) = ty_dvars env.env_v env.env_s dvars in
-    let env' = {env_v = env_v' ; env_s = env.env_s ; env_f = env_.env_f} in
-    let (b,ty_bl) = ty_bloc env' type_r_ask q in
-    (b , lty_v @ ty_bl)
-
-  | {desc = Par_Bstmt s ; loc = loc} :: q ->
-    let (b,ty_s) = ty_stmt env type_r_ask {desc = s ; loc = loc} in
-    if b then (true , [Ty_Bstmt ty_s])
-    else
-     (let (b',ty_bl') = ty_bloc env type_r_ask q in
-      (b , (Ty_Bstmt ty_s) :: ty_bl') )
-
+  | Par_Sbloc l_ds ->
+      let rec aux_bloc env' = function
+        | [] -> (false , [])
+        | {desc = Par_Sdv dvars} :: q ->
+          let (env'',l_ty_s) = ty_dvars env' dvars in
+          let (b,l_ty_reste) = aux_bloc env'' q in
+          (b , l_ty_s @ l_ty_reste)
+        | ds :: q -> (* pas une decl_var *)
+          let (b,ty_s) = ty_stmt env' type_r_ask ds in
+          if b then (true , [ty_s])
+          else
+          ( let (b',l_ty_reste) = aux_bloc env' q in
+            ( b' , ty_s :: l_ty_reste) )
+      in
+      let (b,l_ty_s) = aux_bloc env l_ds in
+      (b , Ty_Sbloc l_ty_s)
 
 
 (* TRAITEMENT DES DÉFINITIONS DE STRUCTURES *)
@@ -206,7 +220,7 @@ and ty_bloc env type_r_ask bl : (bool * ty_bloc) = match bl with
    on ne construit par d'arbre de sortie. En revanche on calcule
    les offsets et les sizes. *)
 
-let process_struct env_s dt : unit =
+let process_struct env_s (dt : par_dt) : unit =
   if Hashtbl.mem env_s dt.nom.desc 
   then raise (Typing_error {loc = dt.nom.loc ;
     msg = "Type construit déjà existant"}) ;
@@ -217,7 +231,7 @@ let process_struct env_s dt : unit =
   Hashtbl.add env_s dt.nom.desc (tabch,0) ; 
   (* Permet d'avoir des champs de type cette structure *)
   List.iter 
-   (fun (dvars : par_dv) -> 
+   (fun (dvars : par_dfl) -> 
       test_welldef env_s dvars.typ ; 
       let type_v = dvars.typ.desc in
       List.iter 
@@ -231,7 +245,9 @@ let process_struct env_s dt : unit =
     )
     dt.fields ;
   Hashtbl.replace env_s dt.nom.desc (tabch,!offset)
-  
+
+  (* TODO VIRER LES LOC DES STMT *)
+
 (* TRAITEMENT DES DÉFINITIONS DE FONCTIONS *)
 (* But : ajouter une fonction à l'env *)
 let ty_fct env_s env_f (df : par_df) : ty_df =
@@ -256,7 +272,8 @@ let ty_fct env_s env_f (df : par_df) : ty_df =
   Hashtbl.add env_f df.nom.desc 
     {usefull = false ; type_r = df.type_r.desc ; type_params = type_params} ;
   let env = {env_v = IdMap.empty ; env_s = env_s ; env_f = env_f} in
-  let (b,ty_bl) = ty_bloc env df.type_r.desc df.body in
+  let (b,ty_stmt) = ty_stmt env df.type_r.desc (Par_Sbloc 
+  let (b,ty_) = ty_bloc env df.type_r.desc df.body in
   if not !b && !warnings
   then Printf.printf "WARNING : il manque un return à cette fonction" ;
   (* Utiliser raise, si Typing_error on s'arrête, si c'est juste Typing_warning, 
