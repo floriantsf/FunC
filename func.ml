@@ -38,7 +38,11 @@ let main () =
         let p = Parser.file Lexer.token buf in (* Pour l'instant on ne donne pas de nom a ce qui a été créé a partir de l'analyse syntaxique *)
         close_in f;
         if !parse_only then exit 0; (* On s'arrete à l'analyse syntaxique dans ce cas *)
-        
+        let p_t = Typing.ty_file p in        
+
+        if !type_only then exit 0;
+
+        ()
         (*
         (* On fait l'analyse de types *)
         let p = Typer.type_all p in  (* on récupere un nouvel arbre de syntaxe a l'issue du typage *)

@@ -49,33 +49,33 @@ let rec mkOr e1 e2 = match (e1, e2) with
 
 
 let rec mkEq e1 e2 = match (e1, e2) with 
-  |(Sel_Eint n1, Sel_Eint n2) -> Sel_Eint (1 if n1 = n2 else 0)
+  |(Sel_Eint n1, Sel_Eint n2) -> Sel_Eint (if n1 = n2 then 1 else 0)
   |_ -> Sel_binop (Isete, e1, e2)
 
 let rec mkNeq e1 e2 = match (e1, e2) with 
-  |(Sel_Eint n1, Sel_Eint n2) -> Sel_Eint (0 if n1 = n2 else 1)
+  |(Sel_Eint n1, Sel_Eint n2) -> Sel_Eint (if n1 = n2 then 0 else 1)
   |_ -> Sel_binop (Isetne, e1, e2)
 
 let rec mkLt e1 e2 = match (e1, e2) with
-  |(Sel_Eint n1, Sel_Eint n2) -> Sel_Eint (1 if n1 < n2 else 0)
+  |(Sel_Eint n1, Sel_Eint n2) -> Sel_Eint (if n1 < n2 then 1 else 0)
   |_ -> Sel_binop (Isetlt, e1, e2)
 
 let rec mkLe e1 e2 = match (e1, e2) with
-  |(Sel_Eint n1, Sel_Eint n2) -> Sel_Eint (1 if n1 <= n2 else 0)
+  |(Sel_Eint n1, Sel_Eint n2) -> Sel_Eint (if n1 <= n2 then 1 else 0)
   |_ -> Sel_binop (Isetle, e1, e2)
 
 let rec mkGt e1 e2 = match (e1, e2) with
-  |(Sel_Eint n1, Sel_Eint n2) -> Sel_Eint (1 if n1 > n2 else 0)
+  |(Sel_Eint n1, Sel_Eint n2) -> Sel_Eint (if n1 > n2 then 1 else 0)
   |_ -> Sel_binop (Isetgt, e1, e2)
 
 let rec mkGe e1 e2 = match (e1, e2) with
-  |(Sel_Eint n1, Sel_Eint n2) -> Sel_Eint (1 if n1 >= n2 else 0)
+  |(Sel_Eint n1, Sel_Eint n2) -> Sel_Eint (if n1 >= n2 then 1 else 0)
   |_ -> Sel_binop (Isetge, e1, e2)
 
 (* Opérations unaires *)
 
 let rec mkNot e1 = match e1 with
-  | Sel_Eint n1 -> Sel_Eint (1 if n1 = 0 else 0)
+  | Sel_Eint n1 -> Sel_Eint (if n1 = 0 then 1 else 0)
   | _ -> Sel_unop (Inot , e1)
 
 let rec mkNeg e1 = match e1 with
@@ -125,7 +125,7 @@ let rec instr_stmt s = match s with
   | Ty_Sexpr e-> instr_selec e
   | Ty_Sif (e, s1, s2) -> optIf (instr_selec e) (instr_stmt s1) (instr_stmt s2)
   | Ty_Swhile (e, s1)  -> optWhile (instr_selec e) (instr_stmt s1)
-  | Ty_Sbloc sl -> Sel_bloc List.map instr_stmt sl
+  | Ty_Sbloc sl -> Sel_bloc (List.map instr_stmt sl)
   | Ty_Sreturn e -> Sel_Ireturn (instr_selec e)
 
   

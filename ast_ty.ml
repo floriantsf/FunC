@@ -16,7 +16,7 @@ type ty_expr =
   | Ty_Eassign_var of ident * ty_expr
   | Ty_Eassign_ch of ty_expr * int * ty_expr
   | Ty_Ecall of ident * (ty_expr list)
-  | Ty_Ept of expr * int
+  | Ty_Ept of ty_expr * int
  
 type ty_stmt =
   | Ty_Sdv of ident * (ty_expr option)

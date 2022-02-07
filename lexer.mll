@@ -33,9 +33,9 @@ let entier = '0'
            | "0x" (chiffre_hexa)+
 
 rule token = parse 
-             |ident as s {try Hashtbl.find keywords s with Not_found -> (try (match Hashtbl.find p_p.definitions s
-                with VInt i -> CONST i) 
-              with Not_found -> IDENT s)}
+             |ident as s {try Hashtbl.find keywords s with Not_found -> (*(try (match Hashtbl.find p_p.definitions s
+                with VInt i -> CONST i) *)
+              IDENT s}
              | entier as x {CONST (int_of_string x)}
              | "*" {STAR}
              | "=" {ASSIGN}
@@ -62,7 +62,7 @@ rule token = parse
              |"\n" {Lexing.new_line lexbuf; token lexbuf}
              |"/*" {comment1 lexbuf}
              |"//" {comment2 lexbuf}
-             |'"' {chaine lexbuf}
+             (*|'"' {chaine lexbuf}*)
              |[' ' '\t'] {token lexbuf}
              |eof {EOF}
              |_ {raise (Lexing_error ("Unknown keyword"))}
@@ -100,6 +100,7 @@ and comment2 = parse
              | "\n" {Lexing.new_line lexbuf; token lexbuf}
              | eof {EOF}
              | _ {comment2 lexbuf}
+(*
 and chaine = parse 
            |'"' {let res = !string_buffer in string_buffer := ""; STRING res} 
            |"\\\"" {string_buffer := !string_buffer ^ Char.escaped '"'; chaine lexbuf} 
@@ -109,3 +110,4 @@ and chaine = parse
            |"\n" {raise (Lexing_error "Illegal line jump in string")}
            |qqconque as s {string_buffer := !string_buffer ^ Char.escaped s; chaine lexbuf} 
            |eof {raise (Lexing_error "String not finished")}
+*)
