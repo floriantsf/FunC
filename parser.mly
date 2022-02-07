@@ -26,6 +26,7 @@
 %right NOT NEG
 %left SELECT
 
+%nonassoc THEN
 %nonassoc ELSE
 
 
@@ -158,7 +159,7 @@ stmt :
     { Par_Snil }
   | de = loc(expr) ; SEMICOLON
     { Par_Sexpr de }
-  | IF ; LPAR ; de = loc(expr) ; RPAR ; ds = loc(stmt)
+  | IF ; LPAR ; de = loc(expr) ; RPAR ; ds = loc(stmt) %prec THEN
     { Par_Sif (de , ds , {desc = Par_Snil ; loc = dummy_loc }) }
   | IF ; LPAR ; de = loc(expr) ; RPAR ; ds1 = loc(stmt) ; ELSE ; ds2 = loc(stmt) 
     { Par_Sif (de , ds1 , ds2) }
