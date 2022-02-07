@@ -17,7 +17,7 @@ type par_expr =
 
 type par_dv = 
 { typ : ctype desc ; 
-  vars : ((ident desc) * (par_expr desc option)) list }
+  vars_expr : ((ident desc) * (par_expr desc option)) list }
 type par_stmt =
   | Par_Sdv of par_dv
   | Par_Snil

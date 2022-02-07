@@ -148,9 +148,9 @@ init_var :
 
 decl_var : 
   | dty = loc(ty_int) ; l = separated_nonempty_list(COMMA, init_var) ; SEMICOLON
-    { {typ = dty ; vars = l} }
+    { {typ = dty ; vars_expr = l} }
   | dty = loc(ty_sr)  ; l = separated_nonempty_list(COMMA, STAR; x = init_var {x}) ; SEMICOLON 
-    { {typ = dty ; vars = l} }
+    { {typ = dty ; vars_expr = l} }
 
 stmt : 
   | dv = decl_var 
