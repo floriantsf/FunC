@@ -19,7 +19,7 @@ type ty_expr =
   | Ty_Ept of ty_expr * int
  
 type ty_stmt =
-  | Ty_Sdv of ident * (ty_expr option)
+  | Ty_Sdv of ident
   | Ty_Snil
   | Ty_Sexpr of ty_expr
   | Ty_Sif of ty_expr * ty_stmt * ty_stmt

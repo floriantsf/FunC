@@ -4,8 +4,9 @@ open Ast_ty
 
 let warnings = ref true
 
-(* FONCTIONS AUXILIAIRES POUR VERIFIER SI DEUX TYPES SONT EQUIVALENTS. *)
+(* FONCTIONS AUXILIAIRES *)
 
+(* Vérifie si deux types sont équivalents *)
 let ty_equiv (t1 : ctype_typed) (t2 : ctype_typed) : bool =
   (t1 = t2) || ( match t1,t2 with
   | Typenull , CT Int
@@ -22,6 +23,13 @@ let test_ty_equiv t1 t2 =
     msg = "Les deux membres de cette égalité/comparaison ne sont pas de \
     types équivalents. Respectivement : "^(str_of_ctype_typed t1)
     ^" et "^(str_of_ctype_typed t2) } )
+
+
+(* Vérifie si un type existe *)
+let test_welldef env_s (dtyp : ctype desc) = match dtyp.desc with
+  | Int -> ()
+  | Struct sr -> if not (Hashtbl.mem env_s sr) 
+    then raise (Typing_error {loc = dtyp.loc ; msg = "Structure inconnue."})
 
 
 (* TRAITEMENT DES EXPRESSIONS *)
@@ -86,7 +94,6 @@ let rec ty_expr env de : (ctype_typed * ty_expr) =
       (CT Int , Ty_Ebinop (op , ty_e1 , ty_e2) )
 
     | Badd | Bsub | Bmul | Bdiv | Bmod ->
-      (* TODO simplifier les opérations avec des constantes *)
       test_ty_equiv type_e1 (CT Int) ;
       test_ty_equiv type_e2 (CT Int) ;
       (CT Int , Ty_Ebinop (op , ty_e1 , ty_e2) )
@@ -117,17 +124,24 @@ let rec ty_expr env de : (ctype_typed * ty_expr) =
     end
 
 
-(* DECLARATION DE VARIABLES LOCALES *)
+(* TRAITEMENT DES INSTRUCTIONS *)
 
+(* REM : 
+   - En Java, le compilateur préfère s'assurer que toute méthode a 
+    un return si le type de retour n'est pas void.
+    Mais en C gcc ne s'en soucit pas, quitte à planter sur un Segmentation
+    Fault à l'exécution. Pour le moment on suit le comportement de gcc,
+    toutefois, en mettant warning à vrai, on peut relever les return manquant.
+   - On vire les instructions après un return certain.
+   - On change int x=3,y,z=2 ; en int x; x=3; int y; int z; z=2; 
+   Difficulté : le découpage des déclarations de variables, change une instruction
+   en plusieurs, mais il ne s'agit pas pour autant d'un sous-bloc d'instructions. 
+   (Sinon les variables seraient déclarées locales au sous-bloc...)
+   Si l'instruction int x=3,y,z=2 ; apparaissait dans un bloc, il faut la substituer
+   par la liste des autres, et non pas la changer en Ty_Bloc (...). 
+   Si elle n'était pas dans un bloc, on peut faire un Ty_Bloc. *)
 
-
-(* fct auxiliaire pour vérifier si un type existe *)
-let test_welldef env_s (dtyp : ctype desc) = match dtyp.desc with
-  | Int -> ()
-  | Struct sr -> if not (Hashtbl.mem env_s sr) 
-    then raise (Typing_error {loc = dtyp.loc ; msg = "Structure inconnue."})
-
-(* On change int x,y,z ; en int x ; int y ; int z *)
+(* Traitement des déclarations / initialisations de variables *)
 let ty_dvars env_v env_s dvars : (env_vars * par_bloc) = 
   test_welldef env_s dvars.typ ;
   let type_v = dvars.typ.desc in
@@ -144,15 +158,6 @@ let ty_dvars env_v env_s dvars : (env_vars * par_bloc) =
    dvars.vars
     
 
-
-(* TRAITEMENT DES INSTRUCTIONS ET BLOCS *)
-
-(* En Java, le compilateur préfère s'assurer que toute méthode a 
-   un return si le type de retour n'est pas void.
-   Mais en C gcc ne s'en soucis pas, quitte à planter sur un Segmentation
-   Fault à l'exécution. Pour le moment on suit le comportement de gcc,
-   toutefois, en mettant warning à vrai, on peut relever les return menqaunt. *)
-(* On vire les instructions après un return certain. *)
 let rec ty_stmt env type_r_ask ds : (bool * ty_stmt) = 
   (* bool : a-t-on trouvé un return à coup sûr *)
   match ds.desc with
