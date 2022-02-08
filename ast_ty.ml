@@ -47,4 +47,4 @@ type ty_info_fct =
   type_params : ctype list }
 type env_fct = (ident , ty_info_fct ) Hashtbl.t
 
-type ty_env = { env_v : env_vars ; env_s : env_sr ; env_f : env_fct }
+type ty_env = { mutable env_v : env_vars ; env_s : env_sr ; env_f : env_fct }
