@@ -18,6 +18,19 @@ let () = List.iter (fun (s,t) -> Hashtbl.add keywords s t)
       "sizeof", SIZEOF;
     ]
   let string_buffer = ref ""
+  let char_error s = raise (Lexing_error ("Illegal character sequence: " ^s))
+  let char_to_int = match String.length s with
+  |1 -> Char.code s.[0]
+  |2 |4 when s.[0] = '\\' -> 
+      begin match s.[1] with
+      |'n' -> 10
+      |'t' -> 9
+      |'\'' -> 39
+      |'\"' -> 34 
+      |'x' -> int_of_string ("0x"^ String.sub s 2 2)
+      |_ -> char_error s
+      end
+      |_ -> char_error s
 }
  
 let alpha = ['a'-'z' 'A'-'Z']
@@ -26,17 +39,35 @@ let ident = (alpha | '_') (alpha |chiffre | '_')*
 let chiffre_octal = ['0'-'7']
 let chiffre_hexa = ['0'-'9' 'a'-'f'  'A'-'F']
 let qqconque = [ ^ '"']
-            
-let entier = '0'
-           | ['1'-'9'] chiffre* 
-           | '0' (chiffre_octal)+
-           | "0x" (chiffre_hexa)+
+let char_ascii =
+  [^'\000'-'\x1f' '\\' '\'' '\"']
+  | '\\' ('n' | 't' | '\'' |'\"')
+  | "\\x" chiffre_hexa chiffre_hexa
+
 
 rule token = parse 
              |ident as s {try Hashtbl.find keywords s with Not_found -> (*(try (match Hashtbl.find p_p.definitions s
                 with VInt i -> CONST i) *)
               IDENT s}
-             | entier as x {CONST (int_of_string x)}
+             | "0"
+                 { CONST 0l }
+             | (['1'-'9'] chiffre*) as s
+                 { try
+               CONST (Int32.of_string s)
+             with _ ->
+               raise (Lexing_error ("invalid integer constant '" ^ s ^ "'")) }
+             | "0" (chiffre_octal+ as s)
+                 { try
+               CONST (Int32.of_string ("0o" ^ s))
+             with _ ->
+               raise (Lexing_error ("invalid octal constant '" ^ s ^ "'")) }
+             | ("0x" chiffre_hexa+) as s
+                 { try
+               CONST (Int32.of_string s)
+             with _ ->
+               raise (Lexing_error ("invalid hexadecimal constant '" ^ s ^ "'")) }
+             | '\'' (char_ascii as s) '\''
+                 { CONST (Int32.of_int (decode_char s)) }
              | "*" {STAR}
              | "=" {ASSIGN}
              | "||" {OR}
