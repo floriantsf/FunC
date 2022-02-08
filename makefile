@@ -1,7 +1,7 @@
 all: func
 
 tests : func
-	cd tests && ./run -1 ../func 
+	cd tests && ./run -2 ../func 
 
 
 func : func.exe
