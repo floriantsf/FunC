@@ -173,9 +173,8 @@ let ty_dvars env (dvars : par_dv) : (ty_env * (ty_stmt list)) =
   (env' , l_ty_s)
 
 
-let rec ty_stmt env type_r_ask ds : (bool * ty_stmt) = 
-  (* bool : a-t-on trouvé un return à coup sûr *)
-  match ds.desc with
+let rec ty_stmt env type_r_ask st : (bool * ty_stmt) = match st with
+  (* bool : a-t-on trouvé un return à coup sûr *) 
   | Par_Sdv dvars -> 
       let _ , l_ty_s = ty_dvars env dvars in
       (false , Ty_Sbloc l_ty_s)
@@ -183,14 +182,14 @@ let rec ty_stmt env type_r_ask ds : (bool * ty_stmt) =
   | Par_Sexpr de -> 
       let _,ty_e = ty_expr env de in
       (false , Ty_Sexpr ty_e)
-  | Par_Sif (de,ds1,ds2) ->
+  | Par_Sif (de,st1,st2) ->
       let _,ty_e = ty_expr env de in
-      let b1,ty_s1 = ty_stmt env type_r_ask ds1 in
-      let b2,ty_s2 = ty_stmt env type_r_ask ds2 in
+      let b1,ty_s1 = ty_stmt env type_r_ask st1 in
+      let b2,ty_s2 = ty_stmt env type_r_ask st2 in
       (b1 && b2 , Ty_Sif (ty_e , ty_s1 , ty_s2))
-  | Par_Swhile (de,ds') ->
+  | Par_Swhile (de,st') ->
       let _,ty_e = ty_expr env de in
-      let _,ty_s' = ty_stmt env type_r_ask ds' in
+      let _,ty_s' = ty_stmt env type_r_ask st' in
       (* On ne fait pas confiance au while pour un return *)
       (false , Ty_Swhile (ty_e , ty_s'))
   | Par_Sreturn de ->
@@ -200,16 +199,16 @@ let rec ty_stmt env type_r_ask ds : (bool * ty_stmt) =
   | Par_Sbloc l_ds ->
       let rec aux_bloc env' = function
         | [] -> (false , [])
-        | {desc = Par_Sdv dvars} :: q ->
-          let (env'',l_ty_s) = ty_dvars env' dvars in
-          let (b,l_ty_reste) = aux_bloc env'' q in
-          (b , l_ty_s @ l_ty_reste)
-        | ds :: q -> (* pas une decl_var *)
-          let (b,ty_s) = ty_stmt env' type_r_ask ds in
-          if b then (true , [ty_s])
-          else
-          ( let (b',l_ty_reste) = aux_bloc env' q in
-            ( b' , ty_s :: l_ty_reste) )
+        | (Par_Sdv dvars) :: q ->
+            let (env'',l_ty_s) = ty_dvars env' dvars in
+            let (b,l_ty_reste) = aux_bloc env'' q in
+            (b , l_ty_s @ l_ty_reste)
+        | st' :: q -> (* pas une decl_var *)
+            let (b,ty_s) = ty_stmt env' type_r_ask st' in
+            if b then (true , [ty_s])
+            else
+            ( let (b',l_ty_reste) = aux_bloc env' q in
+              ( b' , ty_s :: l_ty_reste) )
       in
       let (b,l_ty_s) = aux_bloc env l_ds in
       (b , Ty_Sbloc l_ty_s)
@@ -239,26 +238,26 @@ let process_struct env_s (dt : par_dt) : unit =
           if Hashtbl.mem tabch did.desc 
           then raise (Typing_error { loc = did.loc ;
             msg = "Au sein d'une structure il ne peut y avoir deux champs de même nom."})
-          else (Hashtbl.add tabch did.desc !offset ; offset := 8 + !offset)
+          else (Hashtbl.add tabch did.desc (type_v,!offset) ; offset := 8 + !offset)
         )
         dvars.vars
     )
     dt.fields ;
   Hashtbl.replace env_s dt.nom.desc (tabch,!offset)
 
-  (* TODO VIRER LES LOC DES STMT *)
+
 
 (* TRAITEMENT DES DÉFINITIONS DE FONCTIONS *)
 (* But : ajouter une fonction à l'env *)
 let ty_fct env_s env_f (df : par_df) : ty_df =
-  if Hashtbl.mem env_f df.nom.desc 
+  let f_nom = df.nom.desc in
+  if Hashtbl.mem env_f f_nom 
   then raise (Typing_error {loc = df.nom.loc ;
     msg = "Une autre application est déjà nommée ainsi" }) ;
   test_welldef env_s df.type_r ;
   let set_params = ref IdSet.empty in
   let type_params,ty_params = 
-    List.split (
-    List.map 
+    List.split ( List.map 
      (fun (dp : par_param) -> 
         test_welldef env_s dp.typ ;
         if IdSet.mem dp.nom.desc !set_params 
@@ -269,16 +268,17 @@ let ty_fct env_s env_f (df : par_df) : ty_df =
       )
       df.params ) 
   in
-  Hashtbl.add env_f df.nom.desc 
-    {usefull = false ; type_r = df.type_r.desc ; type_params = type_params} ;
+  let info_f = {usefull = false ; type_r = df.type_r.desc ; type_params = type_params} in
+  if f_nom = "main" then info_f.usefull <- true ;
+  Hashtbl.add env_f f_nom info_f ; 
   let env = {env_v = IdMap.empty ; env_s = env_s ; env_f = env_f} in
-  let (b,ty_stmt) = ty_stmt env df.type_r.desc (Par_Sbloc 
-  let (b,ty_) = ty_bloc env df.type_r.desc df.body in
-  if not !b && !warnings
+  let (b,bty_st) = ty_stmt env (CT df.type_r.desc) (Par_Sbloc df.body) in
+  let l_ty_s = match bty_st with | Ty_Sbloc l -> l | _ -> failwith "n'arrive pas" in
+  if not b && !warnings
   then Printf.printf "WARNING : il manque un return à cette fonction" ;
   (* Utiliser raise, si Typing_error on s'arrête, si c'est juste Typing_warning, 
      on peut continuer, et si on veut on affiche le warning rapporté. *)
-  { id = df.nom.desc ; params = ty_params ; body = ty_bl }
+  { id = f_nom ; params = ty_params ; body = l_ty_s }
 
 
 
@@ -301,12 +301,4 @@ let ty_file (pf : par_file) : ty_file =
       let info_f = Hashtbl.find env_f ty_f.id in
       info_f.usefull)
     list_ty_f
-
-
-
-
-
-
-
-
 
