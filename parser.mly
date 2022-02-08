@@ -105,7 +105,7 @@ expr :
     { Par_Eident s }
   | NOT ; de = loc(expr)
     { Par_Eunop (Unot,de) }
-  | NEG ; de = loc(expr)
+  | SUB ; de = loc(expr) %prec NEG
     { Par_Eunop (Uneg,de) }
   | de1 = loc(expr) ; op = operator ; de2 = loc(expr)
     { Par_Ebinop (op , de1 , de2) }
