@@ -159,19 +159,19 @@ stmt :
     { Par_Snil }
   | de = loc(expr) ; SEMICOLON
     { Par_Sexpr de }
-  | IF ; LPAR ; de = loc(expr) ; RPAR ; ds = loc(stmt) %prec THEN
-    { Par_Sif (de , ds , {desc = Par_Snil ; loc = dummy_loc }) }
-  | IF ; LPAR ; de = loc(expr) ; RPAR ; ds1 = loc(stmt) ; ELSE ; ds2 = loc(stmt) 
-    { Par_Sif (de , ds1 , ds2) }
-  | WHILE ; LPAR ; de = loc(expr) ; RPAR ; ds = loc(stmt)
-    { Par_Swhile (de , ds) }
+  | IF ; LPAR ; de = loc(expr) ; RPAR ; st = stmt %prec THEN
+    { Par_Sif (de , st , Par_Snil) }
+  | IF ; LPAR ; de = loc(expr) ; RPAR ; st1 = stmt ; ELSE ; st2 = stmt 
+    { Par_Sif (de , st1 , st2) }
+  | WHILE ; LPAR ; de = loc(expr) ; RPAR ; st = stmt
+    { Par_Swhile (de , st) }
   | b = bloc
     { Par_Sbloc b }
   | RETURN ; de = loc(expr) ; SEMICOLON 
     { Par_Sreturn de }
 
 bloc : 
-  | LBRACK ; l = list(loc(stmt)) ; RBRACK  { l }
+  | LBRACK ; l = list(stmt) ; RBRACK  { l }
 
 // ------------------------------------------ //
 %%

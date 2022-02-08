@@ -22,9 +22,9 @@ type par_stmt =
   | Par_Sdv of par_dv
   | Par_Snil
   | Par_Sexpr of par_expr desc
-  | Par_Sif of (par_expr desc) * (par_stmt desc) * (par_stmt desc)
-  | Par_Swhile of (par_expr desc) * (par_stmt desc)
-  | Par_Sbloc of par_stmt desc list
+  | Par_Sif of (par_expr desc) * par_stmt * par_stmt
+  | Par_Swhile of (par_expr desc) * par_stmt
+  | Par_Sbloc of par_stmt list
   | Par_Sreturn of par_expr desc
 
 type par_param = {typ : ctype desc ; nom : ident desc}
@@ -36,7 +36,7 @@ type par_df =
 { type_r : ctype desc ; 
   nom : ident desc ;
   params : par_param list ;
-  body : par_stmt desc list }
+  body : par_stmt list }
 
 type par_decl = 
   | Par_Ddt of par_dt
