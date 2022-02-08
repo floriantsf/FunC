@@ -19,7 +19,7 @@ let () = List.iter (fun (s,t) -> Hashtbl.add keywords s t)
     ]
   let string_buffer = ref ""
   let char_error s = raise (Lexing_error ("Illegal character sequence: " ^s))
-  let char_to_int = match String.length s with
+  let char_to_int s = match String.length s with
   |1 -> Char.code s.[0]
   |2 |4 when s.[0] = '\\' -> 
       begin match s.[1] with
@@ -50,53 +50,54 @@ rule token = parse
                 with VInt i -> CONST i) *)
               IDENT s}
              | "0"
-                 { CONST 0l }
+                 { CONST 0 }
              | (['1'-'9'] chiffre*) as s
                  { try
-               CONST (Int32.of_string s)
+               CONST (int_of_string s)
              with _ ->
                raise (Lexing_error ("invalid integer constant '" ^ s ^ "'")) }
              | "0" (chiffre_octal+ as s)
                  { try
-               CONST (Int32.of_string ("0o" ^ s))
+               CONST (int_of_string ("0o" ^ s))
              with _ ->
                raise (Lexing_error ("invalid octal constant '" ^ s ^ "'")) }
              | ("0x" chiffre_hexa+) as s
                  { try
-               CONST (Int32.of_string s)
+               CONST (int_of_string s)
              with _ ->
                raise (Lexing_error ("invalid hexadecimal constant '" ^ s ^ "'")) }
              | '\'' (char_ascii as s) '\''
-                 { CONST (Int32.of_int (decode_char s)) }
+                 { CONST  (char_to_int s) }
              | "*" {STAR}
              | "=" {ASSIGN}
              | "||" {OR}
              |"&&" {AND}
              |"==" {EQ}
              |"!=" {NEQ}
-             |"<" {LT}
-             |">" {GT}
+             |'<' {LT}
+             |'>' {GT}
              |"<=" {LE}
              |">=" {GE}
-             |"+" {ADD}
-             |"-" {SUB}
-             |"*" {MUL}
-             |"/" {DIV}
-             |"%" {MOD}
-             |"!" {NOT}
+             |'+' {ADD}
+             |'-' {SUB}
+             |'*' {MUL}
+             |'/' {DIV}
+             |'%' {MOD}
+             |'!' {NOT}
              |"->" {SELECT}
-             |"{" {LBRACK}
-             |"}" {RBRACK}
-             |"(" {LPAR}
-             |")" {RPAR}
-             |"," {COMMA}
-             |"\n" {Lexing.new_line lexbuf; token lexbuf}
+             |'{' {LBRACK}
+             |'}' {RBRACK}
+             |'(' {LPAR}
+             |')' {RPAR}
+             |',' {COMMA}
+             |';' {SEMICOLON}
+             |'\n' {Lexing.new_line lexbuf; token lexbuf}
              |"/*" {comment1 lexbuf}
              |"//" {comment2 lexbuf}
              (*|'"' {chaine lexbuf}*)
              |[' ' '\t'] {token lexbuf}
              |eof {EOF}
-             |_ {raise (Lexing_error ("Unknown keyword"))}
+             |_ as s {raise (Lexing_error ("Unknown keyword" ^ Char.escaped(s)))}
 (*
 and check_for_condition = parse
              |"ifdef" {check_ifdef lexbuf}
