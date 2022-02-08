@@ -80,7 +80,7 @@ rule token = parse
              |">=" {GE}
              |'+' {ADD}
              |'-' {SUB}
-             |'*' {MUL}
+             (*|'*' {MUL}*)
              |'/' {DIV}
              |'%' {MOD}
              |'!' {NOT}

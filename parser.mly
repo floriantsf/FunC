@@ -6,7 +6,7 @@
   let dummy_loc = (Lexing.dummy_pos,Lexing.dummy_pos)
 %}
 
-%token ADD SUB MUL DIV NEG LPAR RPAR MOD NOT 
+%token ADD SUB DIV NEG LPAR RPAR MOD NOT 
 %token EQ NEQ LT LE GT GE AND OR
 %token COMMA ASSIGN SEMICOLON LBRACK RBRACK 
 %token EOF 
@@ -22,7 +22,7 @@
 %left EQ NEQ
 %left LT LE GT GE
 %left ADD SUB
-%left MUL DIV MOD
+%left STAR DIV MOD  // STAR eset utilisé pour la multiplication
 %right NOT NEG
 %left SELECT
 
@@ -128,7 +128,7 @@ expr :
   |GE     {Bge}
   |ADD    {Badd}
   |SUB    {Bsub}
-  |MUL    {Bmul}
+  |STAR   {Bmul}
   |DIV    {Bdiv}
   |MOD    {Bmod}
   |AND    {Band}
