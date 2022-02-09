@@ -4,6 +4,15 @@ open Ast_ty
 
 let warnings = ref true
 
+(* Fonction primitives : *)
+let l_f_prim = ["putchar";"sbrk"]
+let fct_primitives = Hashtbl.create 8
+let () = 
+  Hashtbl.add fct_primitives "putchar" 
+    { l_f_called = [] ; type_r = CT Int ; type_params = [Int]} ;
+  Hashtbl.add fct_primitives "sbrk" 
+    { l_f_called = [] ; type_r = Void ; type_params = [Int]}
+
 (* FONCTIONS AUXILIAIRES *)
 
 (* Vérifie si deux types sont équivalents *)
@@ -20,9 +29,8 @@ let ty_equiv (t1 : ctype_typed) (t2 : ctype_typed) : bool =
 let test_ty_equiv loc t1 t2 =
   if not (ty_equiv t1 t2) 
   then raise (Typing_error {loc = loc ;
-    msg = "Les deux membres de cette égalité/comparaison ne sont pas de \
-    types équivalents. Respectivement : "^(str_of_ctype_typed t1)
-    ^" et "^(str_of_ctype_typed t2) } )
+    msg = "Problème de types non équivalents, type attendu : " 
+    ^ (str_of_ctype_typed t1) ^" ; type donné : "^(str_of_ctype_typed t2) } )
 
 
 (* Vérifie si un type existe *)
@@ -41,8 +49,8 @@ let rec ty_expr env de : (ctype_typed * ty_expr) =
   | Par_Eident id -> 
       begin match IdMap.find_opt id env.env_v with
       | None -> raise (Typing_error {loc = de.loc ; 
-        msg = "Variable inconnue dans le contexte"})
-      | Some t -> ( CT t , Ty_Eident id)
+        msg = "Variable inconnue dans le contexte : "^id})
+      | Some {typ = t} -> ( CT t , Ty_Eident id)
       end
 
   | Par_Ept (de',ch) ->
@@ -117,9 +125,9 @@ let rec ty_expr env de : (ctype_typed * ty_expr) =
       let ltype_loc = List.combine ltype lloc in
       begin try
         List.iter2 
-          (fun (type_e,loc_e) type_ask -> test_ty_equiv loc_e type_e (CT type_ask)) 
+          (fun (type_e,loc_e) type_ask -> test_ty_equiv loc_e (CT type_ask) type_e) 
           ltype_loc info_f.type_params ;
-        (CT info_f.type_r , Ty_Ecall (did.desc , lty) )
+        (info_f.type_r , Ty_Ecall (did.desc , lty) )
       with | Invalid_argument _ ->
         raise (Typing_error {loc = de.loc ; 
         msg = did.desc ^ " est appelée sur un mauvais nombre d'arguments, "
@@ -147,6 +155,22 @@ let rec ty_expr env de : (ctype_typed * ty_expr) =
    Si elle n'était pas dans un bloc, on peut faire un Ty_Bloc. 
    Idem il faut garder ou non le nouveau env_vars. *)
 
+(* Concernant l'aspect locale / globale des variables : 
+    int n = 1;
+    {n = 5 ; int n = 8 ; n = 6 ; printf("n local =%d",n); }
+    printf("n global =%d",n);
+  renvoie 6 puis 5. *)
+
+let set_local_env env = 
+  let env_v' = IdMap.map 
+    (fun (info_v : ty_info_var) : ty_info_var -> 
+      if info_v.statut = Local 
+      then {typ = info_v.typ ; statut = Global}
+      else info_v)
+    env.env_v in
+  {env_v = env_v' ; env_s = env.env_s ; env_f = env.env_f} 
+
+
 let ty_dvars env (dvars : par_dv) : (ty_env * (ty_stmt list)) =
   test_welldef env.env_s dvars.typ ;
   let type_v = dvars.typ.desc in
@@ -154,11 +178,19 @@ let ty_dvars env (dvars : par_dv) : (ty_env * (ty_stmt list)) =
   let l_ty_s = List.fold_left
    (fun l_ty_s (did, de_opt) ->
       let id = did.desc in
-      if IdMap.mem id env'.env_v
-      then raise (Typing_error {loc = did.loc ;
-        msg = "Nom de variable déjà utilisé, \
-        les redéfinitions ne sont pas autorisées." }) ;
-      env'.env_v <- IdMap.add id type_v env'.env_v ;
+      env'.env_v <-
+        begin match IdMap.find_opt id env'.env_v with
+        | None -> IdMap.add id {typ = type_v ; statut = Local} env'.env_v
+        | Some info_v -> 
+          if info_v.statut = Local then raise (Typing_error {loc = did.loc ;
+            msg = "Nom de variable déjà utilisé dans ce bloc d'instructions, \
+            les redéfinitions ne sont pas autorisées au sein d'un même bloc." })
+          else if info_v.statut = Param then raise (Typing_error {loc = did.loc ;
+            msg = "Nom déjà utilisé pour un paramètre, une variable locale à une \
+            fonction ne doit pas prendre le nom d'un paramètre de la dite fonction."})
+          else IdMap.add id {typ = type_v ; statut = Local} env'.env_v
+        end ;
+
       (Ty_Sdv id) :: 
         begin match de_opt with
         | None -> l_ty_s
@@ -184,17 +216,17 @@ let rec ty_stmt env type_r_ask st : (bool * ty_stmt) = match st with
       (false , Ty_Sexpr ty_e)
   | Par_Sif (de,st1,st2) ->
       let _,ty_e = ty_expr env de in
-      let b1,ty_s1 = ty_stmt env type_r_ask st1 in
-      let b2,ty_s2 = ty_stmt env type_r_ask st2 in
+      let b1,ty_s1 = ty_stmt (set_local_env env) type_r_ask st1 in
+      let b2,ty_s2 = ty_stmt (set_local_env env) type_r_ask st2 in
       (b1 && b2 , Ty_Sif (ty_e , ty_s1 , ty_s2))
   | Par_Swhile (de,st') ->
       let _,ty_e = ty_expr env de in
-      let _,ty_s' = ty_stmt env type_r_ask st' in
+      let _,ty_s' = ty_stmt (set_local_env env) type_r_ask st' in
       (* On ne fait pas confiance au while pour un return *)
       (false , Ty_Swhile (ty_e , ty_s'))
   | Par_Sreturn de ->
       let type_e,ty_e = ty_expr env de in
-      test_ty_equiv de.loc type_e type_r_ask ;
+      test_ty_equiv de.loc type_r_ask type_e ;
       (true , Ty_Sreturn ty_e)
   | Par_Sbloc l_ds ->
       let rec aux_bloc env' = function
@@ -210,7 +242,7 @@ let rec ty_stmt env type_r_ask st : (bool * ty_stmt) = match st with
             ( let (b',l_ty_reste) = aux_bloc env' q in
               ( b' , ty_s :: l_ty_reste) )
       in
-      let (b,l_ty_s) = aux_bloc env l_ds in
+      let (b,l_ty_s) = aux_bloc (set_local_env env) l_ds in
       (b , Ty_Sbloc l_ty_s)
 
 
@@ -268,10 +300,16 @@ let ty_fct env_s env_f (df : par_df) : ty_df =
       )
       df.params ) 
   in
-  let info_f = {usefull = false ; type_r = df.type_r.desc ; type_params = type_params} in
-  if f_nom = "main" then info_f.usefull <- true ;
-  Hashtbl.add env_f f_nom info_f ; 
-  let env = {env_v = IdMap.empty ; env_s = env_s ; env_f = env_f} in
+  (* Pour f : *)
+  let info_f = {l_f_called = [] ; type_r = CT df.type_r.desc ; type_params = type_params} in
+  Hashtbl.add env_f f_nom info_f ; (* Pour fct rec *)
+  (* Pour env *)
+  let env_v = List.fold_left 
+    (fun (env_v : env_vars) (dp : par_param) -> 
+      IdMap.add dp.nom.desc {typ = dp.typ.desc ; statut = Param} env_v)
+    IdMap.empty df.params in
+  let env = {env_v = env_v ; env_s = env_s ; env_f = env_f} in
+  (* === *)
   let (b,bty_st) = ty_stmt env (CT df.type_r.desc) (Par_Sbloc df.body) in
   let l_ty_s = match bty_st with | Ty_Sbloc l -> l | _ -> failwith "n'arrive pas" in
   if not b && !warnings
@@ -286,14 +324,17 @@ let ty_fct env_s env_f (df : par_df) : ty_df =
 
 let ty_file (pf : par_file) : ty_file =
   let env_s = Hashtbl.create 8 in
-  let env_f = Hashtbl.create 8 in
+  let env_f = Hashtbl.copy fct_primitives in
   let rec aux = function
-    | [] -> []
+    | [] -> raise (Typing_error {loc = (Lexing.dummy_pos,Lexing.dummy_pos) ;
+      msg = "Il manque une fonction main à ce fichier"})
     | (Par_Ddt dt) :: q -> 
       process_struct env_s dt ; aux q
     | (Par_Ddf df) :: q -> 
-      (ty_fct env_s env_f df) :: (aux q)
-      (* On ne garde que les fonctions *)
+      let ty_f = ty_fct env_s env_f df in
+      if df.nom.desc = "main" then [ty_f]
+      else ty_f :: (aux q)
+      (* On ne garde que les fonctions (pas les def de struct) *)
   in
   let list_ty_f = aux pf in
   List.filter 
