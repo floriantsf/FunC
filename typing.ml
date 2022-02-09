@@ -2,7 +2,7 @@ open Ast
 open Ast_pars
 open Ast_ty
 
-let warnings = ref true
+let warnings = ref false
 
 (* Fonction primitives : *)
 let l_f_prim = ["putchar";"sbrk"]
@@ -37,34 +37,71 @@ let test_ty_equiv loc t1 t2 =
 let test_welldef env_s (dtyp : ctype desc) = match dtyp.desc with
   | Int -> ()
   | Struct sr -> if not (Hashtbl.mem env_s sr) 
-    then raise (Typing_error {loc = dtyp.loc ; msg = "Structure inconnue."})
+    then raise (Typing_error {loc = dtyp.loc ; 
+      msg = "Structure pas encore définie : "^sr})
 
 
-(* Gestion du tri des fonctions inutiles :
+(* TRI DES FONCTIONS ET STRUCTURES INUTILES :
   On ne veut garder que les fonctions utiles, ie en partant de main, celles
-  appelées à un moment. Ainsi on fait un premier parcours pour faire le menage. *)
+  appelées à un moment. Ainsi on fait un premier parcours pour faire le menage. 
+  Idem pour les types structures. *)
 
 let set_f_usefull = ref IdSet.empty
+let set_sr_usefull = ref IdSet.empty
 let f_seen : bool IdMap.t ref = ref IdMap.empty
+let sr_seen : bool IdMap.t ref = ref IdMap.empty
 let f_tab = Hashtbl.create 8
-let init_f_tab ldecl = 
-  f_seen := IdMap.empty ;
-  Hashtbl.clear f_tab ;
+let sr_tab = Hashtbl.create 8
+
+
+let init_tri ldecl = 
+  set_f_usefull := IdSet.empty ; set_sr_usefull := IdSet.empty ;
+  f_seen := IdMap.empty ; sr_seen := IdMap.empty ;
+  Hashtbl.clear f_tab ; Hashtbl.clear sr_tab ; 
   List.iter 
-    (function | Par_Ddt _ -> () 
+    (function 
+     | Par_Ddt dt -> 
+       let sr_nom = dt.nom.desc in
+       if Hashtbl.mem sr_tab sr_nom then 
+         raise (Typing_error {loc = dt.nom.loc ;
+         msg = "Redéfinition de la structure " ^ sr_nom ^ ", ce qui est interdit"}) ;
+       Hashtbl.add sr_tab sr_nom dt.fields ; 
+       sr_seen := IdMap.add sr_nom false !sr_seen
+
      | Par_Ddf df -> 
        let f_nom = df.nom.desc in
        if Hashtbl.mem f_tab f_nom then 
          raise (Typing_error {loc = df.nom.loc ;
-         msg = "Redéfinition de la fonction " ^ f_nom ^ " ce qui est interdit"}) ;
-       Hashtbl.add f_tab f_nom df.body ; 
+         msg = "Redéfinition de la fonction " ^ f_nom ^ ", ce qui est interdit"}) ;
+       Hashtbl.add f_tab f_nom df ; 
        f_seen := IdMap.add f_nom false !f_seen)
     ldecl 
 
-let rec get_f_usefull did =
+
+let rec get_sr_usefull (dct : ctype desc) = 
+  match dct.desc with
+  | Int -> ()
+  | Struct sr ->
+    begin match IdMap.find_opt sr !sr_seen with 
+    | None -> raise (Typing_error {loc = dct.loc ; 
+      msg = "Structure non définie dans le fichier :"^sr})
+    | Some b -> 
+      if not b then begin
+        sr_seen := IdMap.add sr true !sr_seen ;
+        set_sr_usefull := IdSet.add sr !set_sr_usefull ;
+        List.iter 
+          (fun (fl : par_dfl) -> get_sr_usefull fl.typ) 
+          (Hashtbl.find sr_tab sr)
+      end
+    end
+
+
+
+let rec get_f_usefull (did : ident desc) =
   if List.mem did.desc l_f_prim then () else begin
   match IdMap.find_opt did.desc !f_seen with
-  | None -> raise (Typing_error {loc = did.loc ; msg = "Fonction inconnue"})
+  | None -> raise (Typing_error {loc = did.loc ; 
+    msg = "Fonction non définie dans le fichier :"^did.desc})
   | Some b -> 
     if not b then begin
       f_seen := IdMap.add did.desc true !f_seen ;
@@ -75,6 +112,7 @@ let rec get_f_usefull did =
         | Par_Eunop (_,de') -> aux_expr de'
         | Par_Ebinop (_,de1,de2) -> aux_expr de1 ; aux_expr de2
         | Par_Ept (de',_) -> aux_expr de'
+        | Par_Esize did -> get_sr_usefull {desc = Struct did.desc ; loc = did.loc}
         | _ -> ()
       in
       let rec aux_stmt = function
@@ -83,9 +121,19 @@ let rec get_f_usefull did =
         | Par_Swhile (de,st) -> aux_expr de ; aux_stmt st
         | Par_Sbloc lst -> List.iter aux_stmt lst
         | Par_Sreturn de -> aux_expr de
+        | Par_Sdv dv -> 
+          get_sr_usefull dv.typ ;
+          List.iter 
+            (fun (_,de_opt) -> match de_opt with
+            | None -> ()
+            | Some de -> aux_expr de )
+            dv.vars_expr
         | _ -> ()
       in
-      List.iter aux_stmt (Hashtbl.find f_tab did.desc)
+      let df = Hashtbl.find f_tab did.desc in
+      get_sr_usefull df.type_r ;
+      List.iter (fun (dp : par_param) -> get_sr_usefull dp.typ) df.params ;
+      List.iter aux_stmt df.body
     end
   end
 
@@ -113,7 +161,8 @@ let rec ty_expr env de : (ctype_typed * ty_expr) =
         begin match Hashtbl.find_opt env.env_s sr with
         | None -> 
           raise (Typing_error {loc = de'.loc ; 
-            msg = "Cette expression a pour type une structure inconnue"})
+            msg = "Cette expression a pour type une structure pas encore définie \
+              (elle est bien définie, mais trop tard)."})
         | Some (tab_chs,_) -> 
           (match Hashtbl.find_opt tab_chs ch.desc with
           | None -> raise (Typing_error {loc = ch.loc ; 
@@ -163,7 +212,8 @@ let rec ty_expr env de : (ctype_typed * ty_expr) =
 
   | Par_Esize did ->
     begin match Hashtbl.find_opt env.env_s did.desc with
-    | None -> raise (Typing_error {loc = did.loc ; msg = "Structure inconnue"})
+    | None -> raise (Typing_error {loc = did.loc ;
+      msg = "Structure pas encore définie : "^did.desc})
     | Some (_,size) -> (CT Int , Ty_Eint size)
     end
 
@@ -376,14 +426,16 @@ let ty_fct env_s env_f (df : par_df) : ty_df =
 (* FONCTION PRINCIPALE : *)
 
 let ty_file (pf : par_file) : ty_file =
-  init_f_tab pf ; (* Pour retirer les fonctions inutiles *)
+  init_tri pf ; (* Pour retirer les fonctions et structures inutiles *)
   get_f_usefull {desc = "main" ; loc = (Lexing.dummy_pos,Lexing.dummy_pos)} ;
   let env_s = Hashtbl.create 8 in
   let env_f = Hashtbl.copy fct_primitives in
   let rec aux = function
     | [] -> []
     | (Par_Ddt dt) :: q -> 
-      process_struct env_s dt ; aux q
+      if IdSet.mem dt.nom.desc !set_sr_usefull
+      then process_struct env_s dt ; 
+      aux q
       (* On ne garde pas les def de struct *)
     | (Par_Ddf df) :: q -> 
       if IdSet.mem df.nom.desc !set_f_usefull
