@@ -122,12 +122,21 @@ let optWhile e s1 = match e with
 
 let rec instr_stmt s = match s with
   | Ty_Snil -> Sel_Inil
+  | Ty_Sdv s -> Sel_local s
   | Ty_Sexpr e-> instr_selec e
   | Ty_Sif (e, s1, s2) -> optIf (instr_selec e) (instr_stmt s1) (instr_stmt s2)
   | Ty_Swhile (e, s1)  -> optWhile (instr_selec e) (instr_stmt s1)
   | Ty_Sbloc sl -> Sel_bloc (List.map instr_stmt sl)
   | Ty_Sreturn e -> Sel_Ireturn (instr_selec e)
 
-  
+let instr_def_fun { id = nom; params = par; body = bod} =
+  {
+    selec_fun_name = nom;
+    selec_fun_args = par;  
+    selec_fun_body = List.map instr_stmt bod;
+  }  
+
+let instr_selec_prog p =
+  List.map instr_def_fun p
 
 

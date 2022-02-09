@@ -24,18 +24,14 @@ type selec_expr =
 
 type selec_instruction =
   | Sel_Inil
+  | Sel_local of ident
   | Sel_Iexpr of selec_expr
   | Sel_Iif of selec_expr * selec_instruction * selec_instruction
   | Sel_Iwhile of selec_expr * selec_instruction
   | Sel_Ireturn of selec_expr 
   | Sel_block of selec_instruction list
 
-type selec_stmt =
-  | Sel_decl_var of ident
-  | Sel_instr of selec_instruction
 
-type selec_decl = 
-  |Sel_decl_fun of selec_fun_declaration
 
 and selec_fun_declaration = 
   {
@@ -44,5 +40,5 @@ and selec_fun_declaration =
      selec_fun_body : selec_stmt list; 
   }
 
-and selec_program = selec_decl list
+and selec_program = selec_fun_declaration list
 
