@@ -68,5 +68,9 @@ let main () =
                 localisation (Lexing.lexeme_start_p buf);
                 eprintf "Erreur Syntaxique au mot %s@." (Lexing.lexeme buf);
                 exit 1
+        | Ast_ty.Typing_error { loc=pos ; msg=s } ->                                                                                                      
+            localisation_loc pos ;
+            eprintf "erreur typage: %s@." s ;
+            exit 1
 
 let () = main () 

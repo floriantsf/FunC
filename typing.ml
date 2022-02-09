@@ -9,9 +9,9 @@ let l_f_prim = ["putchar";"sbrk"]
 let fct_primitives = Hashtbl.create 8
 let () = 
   Hashtbl.add fct_primitives "putchar" 
-    { l_f_called = [] ; type_r = CT Int ; type_params = [Int]} ;
+    {type_r = CT Int ; type_params = [Int]} ;
   Hashtbl.add fct_primitives "sbrk" 
-    { l_f_called = [] ; type_r = Void ; type_params = [Int]}
+    {type_r = Void ; type_params = [Int]}
 
 (* FONCTIONS AUXILIAIRES *)
 
@@ -38,6 +38,59 @@ let test_welldef env_s (dtyp : ctype desc) = match dtyp.desc with
   | Int -> ()
   | Struct sr -> if not (Hashtbl.mem env_s sr) 
     then raise (Typing_error {loc = dtyp.loc ; msg = "Structure inconnue."})
+
+
+(* Gestion du tri des fonctions inutiles :
+  On ne veut garder que les fonctions utiles, ie en partant de main, celles
+  appelées à un moment. Ainsi on fait un premier parcours pour faire le menage. *)
+
+let set_f_usefull = ref IdSet.empty
+let f_seen : bool IdMap.t ref = ref IdMap.empty
+let f_tab = Hashtbl.create 8
+let init_f_tab ldecl = 
+  f_seen := IdMap.empty ;
+  Hashtbl.clear f_tab ;
+  List.iter 
+    (function | Par_Ddt _ -> () 
+     | Par_Ddf df -> 
+       let f_nom = df.nom.desc in
+       if Hashtbl.mem f_tab f_nom then 
+         raise (Typing_error {loc = df.nom.loc ;
+         msg = "Redéfinition de la fonction " ^ f_nom ^ " ce qui est interdit"}) ;
+       Hashtbl.add f_tab f_nom df.body ; 
+       f_seen := IdMap.add f_nom false !f_seen)
+    ldecl 
+
+let rec get_f_usefull did =
+  if List.mem did.desc l_f_prim then () else begin
+  match IdMap.find_opt did.desc !f_seen with
+  | None -> raise (Typing_error {loc = did.loc ; msg = "Fonction inconnue"})
+  | Some b -> 
+    if not b then begin
+      f_seen := IdMap.add did.desc true !f_seen ;
+      set_f_usefull := IdSet.add did.desc !set_f_usefull ;
+      let rec aux_expr de = match de.desc with
+        | Par_Ecall (did',lde) -> 
+          get_f_usefull did' ; List.iter aux_expr lde
+        | Par_Eunop (_,de') -> aux_expr de'
+        | Par_Ebinop (_,de1,de2) -> aux_expr de1 ; aux_expr de2
+        | Par_Ept (de',_) -> aux_expr de'
+        | _ -> ()
+      in
+      let rec aux_stmt = function
+        | Par_Sexpr de -> aux_expr de
+        | Par_Sif (de,st1,st2) -> aux_expr de ; aux_stmt st1 ; aux_stmt st2
+        | Par_Swhile (de,st) -> aux_expr de ; aux_stmt st
+        | Par_Sbloc lst -> List.iter aux_stmt lst
+        | Par_Sreturn de -> aux_expr de
+        | _ -> ()
+      in
+      List.iter aux_stmt (Hashtbl.find f_tab did.desc)
+    end
+  end
+
+
+    
 
 
 (* TRAITEMENT DES EXPRESSIONS *)
@@ -74,7 +127,7 @@ let rec ty_expr env de : (ctype_typed * ty_expr) =
 
   | Par_Eunop (op , de') ->
       let type_e',ty_e' = ty_expr env de' in
-      if op = Unot && not (ty_equiv type_e' (CT Int)) 
+      if op = Uneg && not (ty_equiv type_e' (CT Int)) 
       then raise (Typing_error {loc = de'.loc ; 
           msg = "Cette expression doit avoir un type équivalent à \
           Int pour lui appliquer un moins unaire."})
@@ -116,10 +169,10 @@ let rec ty_expr env de : (ctype_typed * ty_expr) =
 
   | Par_Ecall (did , lde) ->
     begin match Hashtbl.find_opt env.env_f did.desc with
-    | None -> raise (Typing_error {loc = did.loc ; msg = "Fonction inconnue"})
+    | None -> raise (Typing_error {loc = did.loc ;
+      msg = "Fonction pas encore définie, il faut la définir avant de l'appeler"})
     | Some info_f ->
       (* rappel : on jète les fonctions jamais appelées *)
-      info_f.usefull <- true ;
       let ltype , lty = List.split (List.map (ty_expr env) lde) in
       let lloc = List.map (fun (de : par_expr desc) -> de.loc) lde in
       let ltype_loc = List.combine ltype lloc in
@@ -301,7 +354,7 @@ let ty_fct env_s env_f (df : par_df) : ty_df =
       df.params ) 
   in
   (* Pour f : *)
-  let info_f = {l_f_called = [] ; type_r = CT df.type_r.desc ; type_params = type_params} in
+  let info_f = {type_r = CT df.type_r.desc ; type_params = type_params} in
   Hashtbl.add env_f f_nom info_f ; (* Pour fct rec *)
   (* Pour env *)
   let env_v = List.fold_left 
@@ -313,7 +366,7 @@ let ty_fct env_s env_f (df : par_df) : ty_df =
   let (b,bty_st) = ty_stmt env (CT df.type_r.desc) (Par_Sbloc df.body) in
   let l_ty_s = match bty_st with | Ty_Sbloc l -> l | _ -> failwith "n'arrive pas" in
   if not b && !warnings
-  then Printf.printf "WARNING : il manque un return à cette fonction" ;
+  then Printf.printf "WARNING : il manque un return à cette fonction \n" ;
   (* Utiliser raise, si Typing_error on s'arrête, si c'est juste Typing_warning, 
      on peut continuer, et si on veut on affiche le warning rapporté. *)
   { id = f_nom ; params = ty_params ; body = l_ty_s }
@@ -323,23 +376,19 @@ let ty_fct env_s env_f (df : par_df) : ty_df =
 (* FONCTION PRINCIPALE : *)
 
 let ty_file (pf : par_file) : ty_file =
+  init_f_tab pf ; (* Pour retirer les fonctions inutiles *)
+  get_f_usefull {desc = "main" ; loc = (Lexing.dummy_pos,Lexing.dummy_pos)} ;
   let env_s = Hashtbl.create 8 in
   let env_f = Hashtbl.copy fct_primitives in
   let rec aux = function
-    | [] -> raise (Typing_error {loc = (Lexing.dummy_pos,Lexing.dummy_pos) ;
-      msg = "Il manque une fonction main à ce fichier"})
+    | [] -> []
     | (Par_Ddt dt) :: q -> 
       process_struct env_s dt ; aux q
+      (* On ne garde pas les def de struct *)
     | (Par_Ddf df) :: q -> 
-      let ty_f = ty_fct env_s env_f df in
-      if df.nom.desc = "main" then [ty_f]
-      else ty_f :: (aux q)
-      (* On ne garde que les fonctions (pas les def de struct) *)
+      if IdSet.mem df.nom.desc !set_f_usefull
+      then let ty_f = ty_fct env_s env_f df in (ty_f :: (aux q))
+      else (aux q)
   in
-  let list_ty_f = aux pf in
-  List.filter 
-   (fun (ty_f : ty_df) ->
-      let info_f = Hashtbl.find env_f ty_f.id in
-      info_f.usefull)
-    list_ty_f
+  aux pf
 

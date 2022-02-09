@@ -40,10 +40,13 @@ type ty_file = ty_df list
 
 type tab_champs = (ident , (ctype * int)) Hashtbl.t
 type env_sr = (ident , (tab_champs * int)) Hashtbl.t
-type env_vars = ctype IdMap.t
+
+type statut = Global | Local | Param
+type ty_info_var = { typ : ctype ; statut : statut}
+type env_vars = ty_info_var IdMap.t
+
 type ty_info_fct = 
-{ mutable usefull : bool ; (* On jète les fonctions jamais appelées *)
-  type_r : ctype ; 
+{ type_r : ctype_typed ; 
   type_params : ctype list }
 type env_fct = (ident , ty_info_fct ) Hashtbl.t
 
