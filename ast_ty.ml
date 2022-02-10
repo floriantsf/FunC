@@ -41,7 +41,7 @@ type ty_file = ty_df list
 type tab_champs = (ident , (ctype * int)) Hashtbl.t
 type env_sr = (ident , (tab_champs * int)) Hashtbl.t
 
-type statut = Global | Local | Param
+type statut = Param | Global of int
 type ty_info_var = { typ : ctype ; statut : statut}
 type env_vars = ty_info_var IdMap.t
 
@@ -50,4 +50,4 @@ type ty_info_fct =
   type_params : ctype list }
 type env_fct = (ident , ty_info_fct ) Hashtbl.t
 
-type ty_env = { mutable env_v : env_vars ; env_s : env_sr ; env_f : env_fct }
+type ty_env = { mutable env_v : env_vars ; env_s : env_sr ; env_f : env_fct ; depth : int }

@@ -138,7 +138,18 @@ let rec get_f_usefull (did : ident desc) =
   end
 
 
-    
+(* RENOMMAGE DES VARIABLES EN SORTIE *)
+(* D'après cet exemple (concernant l'aspect local / global des variables) : 
+    int n = 1;
+    {n = 5 ; int n = 8 ; n = 6 ; printf("n local =%d",n); }
+    printf("n global =%d",n);
+    => renvoie 6 puis 5
+   Donc on renomme les variables, en indiquant vaguement leur profondeur au sein 
+   du corps d'une fonction. *)
+
+let var_to_str id_v statut_v = match statut_v with
+  | Param -> id_v ^ "_p"
+  | Global n -> id_v ^ "_" ^ (string_of_int n)
 
 
 (* TRAITEMENT DES EXPRESSIONS *)
@@ -151,7 +162,7 @@ let rec ty_expr env de : (ctype_typed * ty_expr) =
       begin match IdMap.find_opt id env.env_v with
       | None -> raise (Typing_error {loc = de.loc ; 
         msg = "Variable inconnue dans le contexte : "^id})
-      | Some {typ = t} -> ( CT t , Ty_Eident id)
+      | Some info_v -> ( CT info_v.typ , Ty_Eident (var_to_str id info_v.statut))
       end
 
   | Par_Ept (de',ch) ->
@@ -258,40 +269,30 @@ let rec ty_expr env de : (ctype_typed * ty_expr) =
    Si elle n'était pas dans un bloc, on peut faire un Ty_Bloc. 
    Idem il faut garder ou non le nouveau env_vars. *)
 
-(* Concernant l'aspect locale / globale des variables : 
-    int n = 1;
-    {n = 5 ; int n = 8 ; n = 6 ; printf("n local =%d",n); }
-    printf("n global =%d",n);
-  renvoie 6 puis 5. *)
-
-let set_local_env env = 
-  let env_v' = IdMap.map 
-    (fun (info_v : ty_info_var) : ty_info_var -> 
-      if info_v.statut = Local 
-      then {typ = info_v.typ ; statut = Global}
-      else info_v)
-    env.env_v in
-  {env_v = env_v' ; env_s = env.env_s ; env_f = env.env_f} 
+let incr_depth env = 
+  {env_v = env.env_v ; env_s = env.env_s ; env_f = env.env_f ;
+   depth = env.depth + 1}
 
 
 let ty_dvars env (dvars : par_dv) : (ty_env * (ty_stmt list)) =
   test_welldef env.env_s dvars.typ ;
   let type_v = dvars.typ.desc in
-  let env' = {env_v = env.env_v ; env_s = env.env_s ; env_f = env.env_f} in 
+  let pr = env.depth in
+  let env' = {env_v = env.env_v ; env_s = env.env_s ; env_f = env.env_f ; depth = pr} in 
   let l_ty_s = List.fold_left
    (fun l_ty_s (did, de_opt) ->
       let id = did.desc in
       env'.env_v <-
         begin match IdMap.find_opt id env'.env_v with
-        | None -> IdMap.add id {typ = type_v ; statut = Local} env'.env_v
+        | None -> IdMap.add id {typ = type_v ; statut = Global pr} env'.env_v
         | Some info_v -> 
-          if info_v.statut = Local then raise (Typing_error {loc = did.loc ;
+          if info_v.statut = Global pr then raise (Typing_error {loc = did.loc ;
             msg = "Nom de variable déjà utilisé dans ce bloc d'instructions, \
             les redéfinitions ne sont pas autorisées au sein d'un même bloc." })
           else if info_v.statut = Param then raise (Typing_error {loc = did.loc ;
             msg = "Nom déjà utilisé pour un paramètre, une variable locale à une \
             fonction ne doit pas prendre le nom d'un paramètre de la dite fonction."})
-          else IdMap.add id {typ = type_v ; statut = Local} env'.env_v
+          else IdMap.add id {typ = type_v ; statut = Global pr} env'.env_v
         end ;
 
       (Ty_Sdv id) :: 
@@ -319,12 +320,12 @@ let rec ty_stmt env type_r_ask st : (bool * ty_stmt) = match st with
       (false , Ty_Sexpr ty_e)
   | Par_Sif (de,st1,st2) ->
       let _,ty_e = ty_expr env de in
-      let b1,ty_s1 = ty_stmt (set_local_env env) type_r_ask st1 in
-      let b2,ty_s2 = ty_stmt (set_local_env env) type_r_ask st2 in
+      let b1,ty_s1 = ty_stmt (incr_depth env) type_r_ask st1 in
+      let b2,ty_s2 = ty_stmt (incr_depth env) type_r_ask st2 in
       (b1 && b2 , Ty_Sif (ty_e , ty_s1 , ty_s2))
   | Par_Swhile (de,st') ->
       let _,ty_e = ty_expr env de in
-      let _,ty_s' = ty_stmt (set_local_env env) type_r_ask st' in
+      let _,ty_s' = ty_stmt (incr_depth env) type_r_ask st' in
       (* On ne fait pas confiance au while pour un return *)
       (false , Ty_Swhile (ty_e , ty_s'))
   | Par_Sreturn de ->
@@ -345,7 +346,7 @@ let rec ty_stmt env type_r_ask st : (bool * ty_stmt) = match st with
             ( let (b',l_ty_reste) = aux_bloc env' q in
               ( b' , ty_s :: l_ty_reste) )
       in
-      let (b,l_ty_s) = aux_bloc (set_local_env env) l_ds in
+      let (b,l_ty_s) = aux_bloc (incr_depth env) l_ds in
       (b , Ty_Sbloc l_ty_s)
 
 
@@ -411,7 +412,7 @@ let ty_fct env_s env_f (df : par_df) : ty_df =
     (fun (env_v : env_vars) (dp : par_param) -> 
       IdMap.add dp.nom.desc {typ = dp.typ.desc ; statut = Param} env_v)
     IdMap.empty df.params in
-  let env = {env_v = env_v ; env_s = env_s ; env_f = env_f} in
+  let env = {env_v = env_v ; env_s = env_s ; env_f = env_f ; depth = 0} in
   (* === *)
   let (b,bty_st) = ty_stmt env (CT df.type_r.desc) (Par_Sbloc df.body) in
   let l_ty_s = match bty_st with | Ty_Sbloc l -> l | _ -> failwith "n'arrive pas" in
