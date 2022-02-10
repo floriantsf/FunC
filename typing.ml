@@ -295,14 +295,14 @@ let ty_dvars env (dvars : par_dv) : (ty_env * (ty_stmt list)) =
           else IdMap.add id {typ = type_v ; statut = Global pr} env'.env_v
         end ;
 
-      (Ty_Sdv id) :: 
+      (Ty_Sdv (var_to_str id (Global pr))) :: 
         begin match de_opt with
         | None -> l_ty_s
         | Some de -> 
           let new_e = Par_Ebinop (Bassign , {desc = Par_Eident id ; loc = did.loc} , de) in
           let new_loc_e = ( fst(did.loc) , snd(de.loc) ) in
           let new_de : par_expr desc = {desc = new_e ; loc = new_loc_e} in
-          (Ty_Sexpr (snd (ty_expr env new_de))) :: l_ty_s
+          (Ty_Sexpr (snd (ty_expr env' new_de))) :: l_ty_s
         end
     )
     [] dvars.vars_expr in
